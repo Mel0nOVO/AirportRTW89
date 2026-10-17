@@ -5951,6 +5951,7 @@ int rtw89_wait_for_cond_eval(struct rtw89_wait_info *wait,
 	wait->data = prep->data;
 
 cleanup:
+	destroy_completion(&prep->completion);
 	rcu_assign_pointer(wait->resp, NULL);
 	kfree_rcu(prep, rcu_head);
 

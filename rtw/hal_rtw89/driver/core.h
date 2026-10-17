@@ -6448,6 +6448,7 @@ rtw89_assoc_link_rcu_dereference(struct rtw89_dev *rtwdev, u8 macid)
 static inline void rtw89_tx_wait_release(struct rtw89_tx_wait_info *wait)
 {
 	dev_kfree_skb_any(wait->skb);
+	destroy_completion(&wait->completion);
 	kfree_rcu(wait, rcu_head);
 }
 

@@ -55,21 +55,30 @@ static inline void wait_for_completion(struct completion *c)
     IOLockUnlock(c->lock);
 }
 
+#include <kern/clock.h>
+
 /* Returns remaining jiffies (1) on completion, 0 on timeout */
 static inline unsigned long wait_for_completion_timeout(struct completion *c,
                                                          unsigned long timeout_j)
 {
-    unsigned long deadline = jiffies + timeout_j;
+    uint64_t ticks = 0;
+    nanoseconds_to_absolutetime((uint64_t)jiffies_to_msecs(timeout_j) * 1000000ULL, &ticks);
+    uint64_t deadline = mach_absolute_time() + ticks;
+
     IOLockLock(c->lock);
     while (!c->done) {
-        IOLockUnlock(c->lock);
-        if (time_after_eq(jiffies, deadline)) { IOLockLock(c->lock); return 0; }
-        IOSleep(1);
-        IOLockLock(c->lock);
+        int res = IOLockSleepDeadline(c->lock, (void *)c, deadline, THREAD_UNINT);
+        if (res == THREAD_TIMED_OUT) {
+            break;
+        }
     }
-    if (c->done != ~0u) c->done--;
+    unsigned long ret = 0;
+    if (c->done) {
+        if (c->done != ~0u) c->done--;
+        ret = 1;
+    }
     IOLockUnlock(c->lock);
-    return 1;
+    return ret;
 }
 
 
@@ -83,6 +92,14 @@ static inline void reinit_completion(struct completion *c)
     IOLockLock(c->lock);
     c->done = 0;
     IOLockUnlock(c->lock);
+}
+
+static inline void destroy_completion(struct completion *c)
+{
+    if (c->lock) {
+        IOLockFree(c->lock);
+        c->lock = NULL;
+    }
 }
 
 #endif /* _RTW88_COMPAT_COMPLETION_H */
