@@ -44,6 +44,7 @@ extern void     IOLockLock(IOLock *lock);
 extern void     IOLockUnlock(IOLock *lock);
 extern int      IOLockTryLock(IOLock *lock);
 extern int      IOLockSleep(IOLock *lock, void *event, unsigned interruptible);
+extern int      IOLockSleepDeadline(IOLock *lock, void *event, uint64_t deadline, unsigned interruptible);
 extern void     IOLockWakeup(IOLock *lock, void *event, int oneThread);
 
 /* ---- IORecursiveLock (recursive/reentrant mutex) ---- */

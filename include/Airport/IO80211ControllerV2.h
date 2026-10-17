@@ -248,9 +248,6 @@ public:
     OSMetaClassDeclareReservedUnused( IO80211Controller, 13);
     OSMetaClassDeclareReservedUnused( IO80211Controller, 14);
     OSMetaClassDeclareReservedUnused( IO80211Controller, 15);
-    
-    virtual void postMessage(UInt,void *,unsigned long,UInt,void *);
-    virtual IOReturn setMulticastList(ether_addr const*, UInt);
 
 protected:
     uint8_t  filler[0x128];
