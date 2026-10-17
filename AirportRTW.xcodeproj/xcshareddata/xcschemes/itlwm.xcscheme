@@ -15,8 +15,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "024A07AB23FCBC3C009FBA6C"
-               BuildableName = "itlwm.kext"
-               BlueprintName = "itlwm"
+               BuildableName = "RTWCore.kext"
+               BlueprintName = "RTWCore"
                ReferencedContainer = "container:AirportRTW.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -51,8 +51,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "024A07AB23FCBC3C009FBA6C"
-            BuildableName = "itlwm.kext"
-            BlueprintName = "itlwm"
+            BuildableName = "RTWCore.kext"
+            BlueprintName = "RTWCore"
             ReferencedContainer = "container:AirportRTW.xcodeproj">
          </BuildableReference>
       </MacroExpansion>

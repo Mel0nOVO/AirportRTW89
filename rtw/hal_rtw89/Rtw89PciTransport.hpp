@@ -34,6 +34,8 @@ public:
     void disableInterrupts();
     void drainPendingFree();
     UInt64 getInterruptCount() const { return interruptCount; }
+    bool isMsiEnabled() const { return msiEnabled; }
+    int getInterruptIndex() const { return interruptIndex; }
 
 private:
     struct DMAEntry {
@@ -91,6 +93,8 @@ private:
     volatile void *mmioBaseAddress {nullptr};
     IOInterruptEventSource *interruptSource {nullptr};
     bool interruptsEnabled {false};
+    bool msiEnabled {false};
+    int interruptIndex {0};
     volatile UInt64 interruptCount {0};
     struct pci_dev *compatDevice {nullptr};
 

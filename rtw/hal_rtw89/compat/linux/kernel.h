@@ -162,11 +162,15 @@ static inline void fsleep(unsigned long us)
         IOSleep((unsigned int)(us / 1000) + 1);
 }
 
+#include <kern/clock.h>
+
 /* read_poll_timeout_atomic — poll op(args) until cond is true or timeout */
 #define read_poll_timeout_atomic(op, val, cond, delay_us, timeout_us, \
                                   delay_before_read, args...) \
 ({ \
-    u64 _deadline = mach_absolute_time() + (u64)(timeout_us) * 1000ULL; \
+    uint64_t _timeout_ticks = 0; \
+    nanoseconds_to_absolutetime((u64)(timeout_us) * 1000ULL, &_timeout_ticks); \
+    u64 _deadline = mach_absolute_time() + _timeout_ticks; \
     for (;;) { \
         (val) = op(args); \
         if (cond) { break; } \

@@ -245,8 +245,18 @@ static inline u64 pci_resource_len(struct pci_dev *dev, int bar)
 
 /* IRQ alloc/free */
 static inline int pci_alloc_irq_vectors(struct pci_dev *dev, unsigned int min,
-                                         unsigned int max, unsigned int flags) { return 1; }
-static inline void pci_free_irq_vectors(struct pci_dev *dev) {}
+                                         unsigned int max, unsigned int flags)
+{
+    if (flags & PCI_IRQ_MSI) {
+        if (pci_enable_msi(dev) == 0)
+            return 1;
+    }
+    return 1;
+}
+static inline void pci_free_irq_vectors(struct pci_dev *dev)
+{
+    pci_disable_msi(dev);
+}
 
 /* Wake-on-LAN */
 static inline int pci_enable_wake(struct pci_dev *dev, int state, bool en) { return 0; }

@@ -11,6 +11,30 @@ extern "C" {
 void rtw88_trigger_interrupt(void);
 }
 
+#define PCI_CAP_ID_MSI            0x05
+#define PCI_CAP_ID_MSIX           0x11
+#define PCI_MSI_FLAGS             2
+#define PCI_MSIX_FLAGS            2
+#define PCI_MSI_FLAGS_ENABLE      0x0001
+#define PCI_MSIX_FLAGS_ENABLE     0x8000
+
+static void pciMsiSetEnable(IOPCIDevice *device, UInt8 msiCap, int enable)
+{
+    UInt16 control = device->configRead16(msiCap + PCI_MSI_FLAGS);
+    control &= ~PCI_MSI_FLAGS_ENABLE;
+    if (enable)
+        control |= PCI_MSI_FLAGS_ENABLE;
+    device->configWrite16(msiCap + PCI_MSI_FLAGS, control);
+}
+
+static void pciMsiXClearAndSet(IOPCIDevice *device, UInt8 msixCap, UInt16 clear, UInt16 set)
+{
+    UInt16 ctrl = device->configRead16(msixCap + PCI_MSIX_FLAGS);
+    ctrl &= ~clear;
+    ctrl |= set;
+    device->configWrite16(msixCap + PCI_MSIX_FLAGS, ctrl);
+}
+
 OSDefineMetaClassAndStructors(Rtw89PciTransport, OSObject)
 
 Rtw89PciTransport *Rtw89PciTransport::active = nullptr;
@@ -102,12 +126,48 @@ bool Rtw89PciTransport::initWithDevice(IOPCIDevice *device, IOWorkLoop *loop)
     if (rtw88_compat_init() != 0)
         return false;
 
+    int selectedInterruptIndex = 0;
+    int msiIntrIndex = -1;
+    for (int index = 0; ; index++) {
+        int interruptType = 0;
+        if (pciDevice->getInterruptType(index, &interruptType) != kIOReturnSuccess)
+            break;
+        if (interruptType & kIOInterruptTypePCIMessaged) {
+            msiIntrIndex = index;
+            break;
+        }
+    }
+
+    UInt8 msixCap = 0;
+    UInt8 msiCap = 0;
+    pciDevice->findPCICapability(PCI_CAP_ID_MSIX, &msixCap);
+    if (msixCap) {
+        IOLog("AirportRTW-RTW89: MSI-X cap found at 0x%02x; disabling MSI-X\n", msixCap);
+        pciMsiXClearAndSet(pciDevice, msixCap, PCI_MSIX_FLAGS_ENABLE, 0);
+    }
+
+    pciDevice->findPCICapability(PCI_CAP_ID_MSI, &msiCap);
+    if (msiCap && msiIntrIndex >= 0) {
+        pciMsiSetEnable(pciDevice, msiCap, 1);
+        msiEnabled = true;
+        selectedInterruptIndex = msiIntrIndex;
+        IOLog("AirportRTW-RTW89: enabled MSI (cap 0x%02x, interrupt index %d)\n",
+              msiCap, selectedInterruptIndex);
+    } else {
+        msiEnabled = false;
+        selectedInterruptIndex = 0;
+        IOLog("AirportRTW-RTW89: using legacy INTx interrupt (index %d)\n",
+              selectedInterruptIndex);
+    }
+    interruptIndex = selectedInterruptIndex;
+
     interruptSource = IOInterruptEventSource::interruptEventSource(
-        this, &Rtw89PciTransport::interruptOccurred, pciDevice, 0);
+        this, &Rtw89PciTransport::interruptOccurred, pciDevice, interruptIndex);
     if (!interruptSource || workLoop->addEventSource(interruptSource) !=
                                 kIOReturnSuccess)
         return false;
-    IOLog("AirportRTW-RTW89: transport ready; interrupt source held disabled\n");
+    IOLog("AirportRTW-RTW89: transport ready (irq index %d); interrupt source held disabled\n",
+          interruptIndex);
     return true;
 }
 
@@ -422,8 +482,34 @@ void *Rtw89PciTransport::mapBAR(struct pci_dev *, int bar, size_t)
 }
 
 void Rtw89PciTransport::unmapBAR(struct pci_dev *, void *) {}
-int Rtw89PciTransport::enableMSI(struct pci_dev *) { return active ? 0 : -1; }
-void Rtw89PciTransport::disableMSI(struct pci_dev *) {}
+
+int Rtw89PciTransport::enableMSI(struct pci_dev *)
+{
+    if (!active || !active->pciDevice)
+        return -1;
+    if (active->msiEnabled)
+        return 0;
+    UInt8 msiCap = 0;
+    active->pciDevice->findPCICapability(PCI_CAP_ID_MSI, &msiCap);
+    if (!msiCap)
+        return -1;
+    pciMsiSetEnable(active->pciDevice, msiCap, 1);
+    active->msiEnabled = true;
+    IOLog("AirportRTW-RTW89: MSI enabled via pci_enable_msi (cap 0x%02x)\n", msiCap);
+    return 0;
+}
+
+void Rtw89PciTransport::disableMSI(struct pci_dev *)
+{
+    if (!active || !active->pciDevice)
+        return;
+    UInt8 msiCap = 0;
+    active->pciDevice->findPCICapability(PCI_CAP_ID_MSI, &msiCap);
+    if (msiCap)
+        pciMsiSetEnable(active->pciDevice, msiCap, 0);
+    active->msiEnabled = false;
+    IOLog("AirportRTW-RTW89: MSI disabled via pci_disable_msi\n");
+}
 
 int Rtw89PciTransport::findCapability(struct pci_dev *, int capability)
 {

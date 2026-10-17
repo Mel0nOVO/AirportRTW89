@@ -345,7 +345,6 @@ bool AirportRTW::start(IOService *provider)
     pciNub->setBusMasterEnable(true);
     pciNub->setIOEnable(true);
     pciNub->setMemoryEnable(true);
-    pciNub->configWrite8(0x41, 0);
     if (pciNub->requestPowerDomainState(kIOPMPowerOn,
                                         (IOPowerConnection *) getParentEntry(gIOPowerPlane), IOPMLowestState) != IOPMNoErr) {
         super::stop(provider);
@@ -610,8 +609,9 @@ IOReturn AirportRTW::enable(IONetworkInterface *netif)
     XYLog("%s\n", __PRETTY_FUNCTION__);
     super::enable(netif);
     _fCommandGate->enable();
-    if (power_state)
-        enableAdapter(netif);
+    if (!power_state)
+        power_state = 1;
+    enableAdapter(netif);
     return kIOReturnSuccess;
 }
 
@@ -619,6 +619,10 @@ IOReturn AirportRTW::disable(IONetworkInterface *netif)
 {
     XYLog("%s\n", __PRETTY_FUNCTION__);
     super::disable(netif);
+    if (power_state) {
+        power_state = 0;
+        disableAdapter(netif);
+    }
     setLinkStatus(kIONetworkLinkValid);
     return kIOReturnSuccess;
 }

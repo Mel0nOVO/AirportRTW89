@@ -119,6 +119,8 @@ int rtw89_fw_check_rdy(struct rtw89_dev *rtwdev, enum rtw89_fwdl_check_type type
 				       val == RTW89_FWDL_WCPU_FW_INIT_RDY,
 				       1, FWDL_WAIT_CNT, false, rtwdev, type);
 	if (ret) {
+		rtw89_err(rtwdev, "fw check rdy timed out (type=%d, status val=%d, ret=%d)\n",
+			  type, val, ret);
 		switch (val) {
 		case RTW89_FWDL_CHECKSUM_FAIL:
 			rtw89_err(rtwdev, "fw checksum fail\n");
@@ -1938,21 +1940,30 @@ int __rtw89_fw_download(struct rtw89_dev *rtwdev, enum rtw89_fw_type type,
 	int ret;
 	int i;
 
+	rtw89_info(rtwdev, "starting fw download (type=%d, include_bb=%d)\n",
+		   type, include_bb);
+
 	mac->disable_cpu(rtwdev);
 	ret = mac->fwdl_enable_wcpu(rtwdev, 0, true, include_bb);
-	if (ret)
+	if (ret) {
+		rtw89_err(rtwdev, "fwdl_enable_wcpu failed (ret=%d)\n", ret);
 		return ret;
+	}
 
 	ret = rtw89_fw_download_suit(rtwdev, fw_suit);
-	if (ret)
+	if (ret) {
+		rtw89_err(rtwdev, "rtw89_fw_download_suit failed (ret=%d)\n", ret);
 		goto fwdl_err;
+	}
 
 	for (i = 0; i < bbmcu_nr && include_bb; i++) {
 		fw_suit = rtw89_fw_suit_get(rtwdev, RTW89_FW_BBMCU0 + i);
 
 		ret = rtw89_fw_download_suit(rtwdev, fw_suit);
-		if (ret)
+		if (ret) {
+			rtw89_err(rtwdev, "rtw89_fw_download_suit BBMCU%d failed (ret=%d)\n", i, ret);
 			goto fwdl_err;
+		}
 	}
 
 	fw_info->h2c_seq = 0;
@@ -1966,10 +1977,11 @@ int __rtw89_fw_download(struct rtw89_dev *rtwdev, enum rtw89_fw_type type,
 
 	ret = rtw89_fw_check_rdy(rtwdev, RTW89_FWDL_CHECK_FREERTOS_DONE);
 	if (ret) {
-		rtw89_warn(rtwdev, "download firmware fail\n");
+		rtw89_warn(rtwdev, "download firmware fail (ret=%d)\n", ret);
 		goto fwdl_err;
 	}
 
+	rtw89_info(rtwdev, "firmware download successful!\n");
 	return ret;
 
 fwdl_err:
