@@ -1345,11 +1345,8 @@ setSCAN_REQ(OSObject *object,
           sd->ssid,
           ether_sprintf(sd->bssid.octet));
 #endif
-    if (fScanResultWrapping) {
-        if (OSDynamicCast(ItlRtw89, fHalService))
-            setProperty("RTW89AppleScanRequestResult", (UInt64)22, 32);
-        return 22;
-    }
+    fNextNodeToSend = NULL;
+    fScanResultWrapping = false;
     if (ic->ic_state <= IEEE80211_S_INIT) {
         if (OSDynamicCast(ItlRtw89, fHalService))
             setProperty("RTW89AppleScanRequestResult", (UInt64)22, 32);
@@ -1397,11 +1394,8 @@ setSCAN_REQ_MULTIPLE(OSObject *object, struct apple80211_scan_multiple_data *sd)
     for (i = 0; i < sd->ssid_count; i++)
         XYLog("%s index=%d ssid=%s ssid_len=%d\n", __FUNCTION__, i, sd->ssids[i].ssid_bytes, sd->ssids[i].ssid_len);
 #endif
-    if (fScanResultWrapping) {
-        if (OSDynamicCast(ItlRtw89, fHalService))
-            setProperty("RTW89AppleScanRequestResult", (UInt64)22, 32);
-        return 22;
-    }
+    fNextNodeToSend = NULL;
+    fScanResultWrapping = false;
     if (ic->ic_state <= IEEE80211_S_INIT) {
         if (OSDynamicCast(ItlRtw89, fHalService))
             setProperty("RTW89AppleScanRequestResult", (UInt64)22, 32);
