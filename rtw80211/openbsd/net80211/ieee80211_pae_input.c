@@ -690,6 +690,8 @@ ieee80211_recv_4way_msg3(struct ieee80211com *ic,
                          ether_sprintf(ni->ni_macaddr)));
                 ni->ni_port_valid = 1;
                 ieee80211_set_link_state(ic, LINK_STATE_UP);
+                if (ic->ic_event_handler)
+                    (*ic->ic_event_handler)(ic, IEEE80211_EVT_RSN_HANDSHAKE_DONE, NULL);
             }
             ni->ni_assoc_fail = 0;
             if (ic->ic_opmode == IEEE80211_M_STA)

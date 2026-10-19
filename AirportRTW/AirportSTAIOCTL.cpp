@@ -1042,7 +1042,7 @@ setASSOCIATE(OSObject *object,
         return kIOReturnError;
     
     if (ic->ic_state < IEEE80211_S_SCAN)
-        return kIOReturnSuccess;
+        ic->ic_state = IEEE80211_S_SCAN;
     
     if (ic->ic_state == IEEE80211_S_ASSOC || ic->ic_state == IEEE80211_S_AUTH)
         return kIOReturnSuccess;
@@ -1201,6 +1201,9 @@ eventHandler(struct ieee80211com *ic, int msgCode, void *data)
             break;
         case IEEE80211_EVT_STA_ASSOC_DONE:
             interface->postMessage(APPLE80211_M_ASSOC_DONE);
+            break;
+        case IEEE80211_EVT_RSN_HANDSHAKE_DONE:
+            interface->postMessage(APPLE80211_M_RSN_HANDSHAKE_DONE);
             break;
         case IEEE80211_EVT_STA_DEAUTH:
             interface->postMessage(APPLE80211_M_DEAUTH_RECEIVED);

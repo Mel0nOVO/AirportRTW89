@@ -196,6 +196,22 @@ void AirportRTW::associateSSID(uint8_t *ssid, uint32_t ssid_len, const struct et
             ieee80211_ioctl_setnwkeys(ic, &nwkey);
         }
     }
+
+    if (ic->ic_state > IEEE80211_S_AUTH && ic->ic_bss != NULL)
+        IEEE80211_SEND_MGMT(ic, ic->ic_bss, IEEE80211_FC0_SUBTYPE_DEAUTH, IEEE80211_REASON_AUTH_LEAVE);
+    ieee80211_del_ess(ic, NULL, 0, 1);
+    struct ieee80211_node *selbs = ieee80211_node_choose_bss(ic, 0, NULL);
+    if (selbs != NULL) {
+        XYLog("%s: Joining selected BSS: ssid=%s bssid=%s chan=%d\n",
+              __FUNCTION__, selbs->ni_essid, ether_sprintf(selbs->ni_bssid),
+              ieee80211_chan2ieee(ic, selbs->ni_chan));
+        ieee80211_node_join_bss(ic, selbs, 0);
+        fHalService->getDriverController()->clearScanningFlags();
+    } else {
+        XYLog("%s: Target BSS not found in scan cache, entering SCAN\n", __FUNCTION__);
+        if (ic->ic_state != IEEE80211_S_SCAN)
+            ieee80211_new_state(ic, IEEE80211_S_SCAN, -1);
+    }
 }
 
 void AirportRTW::setPTK(const u_int8_t *key, size_t key_len) {
@@ -750,11 +766,13 @@ SInt32 AirportRTW::monitorModeSetEnabled(
 bool AirportRTW::
 useAppleRSNSupplicant(IO80211Interface *interface)
 {
-#ifdef USE_APPLE_SUPPLICANT
-    return true;
-#else
     return false;
-#endif
+}
+
+bool AirportRTW::
+useAppleRSNSupplicant(IO80211VirtualInterface *interface)
+{
+    return false;
 }
 
 IOReturn AirportRTW::getPacketFilters(const OSSymbol *group, UInt32 *filters) const

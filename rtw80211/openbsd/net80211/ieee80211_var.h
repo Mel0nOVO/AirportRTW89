@@ -497,9 +497,7 @@ struct ieee80211com {
 	u_int8_t		ic_des_essid[IEEE80211_NWID_LEN];
 	struct ieee80211_channel *ic_des_chan;	/* desired channel */
 	u_int8_t		ic_des_bssid[IEEE80211_ADDR_LEN];
-#ifdef USE_APPLE_SUPPLICANT
 	u_int8_t		ic_rsn_ie_override[257];
-#endif
     u_int16_t       ic_deauth_reason;
     u_int16_t       ic_assoc_status;
 	struct ieee80211_key	ic_nw_keys[IEEE80211_GROUP_NKID];
@@ -662,6 +660,7 @@ struct ieee80211_ess {
 #define IEEE80211_EVT_STA_DEAUTH                2
 #define IEEE80211_EVT_COUNTRY_CODE_UPDATE       3
 #define IEEE80211_EVT_SCAN_DONE                 4
+#define IEEE80211_EVT_RSN_HANDSHAKE_DONE        5
 
 void	ieee80211_ifattach(struct _ifnet *, IOEthernetController *controller);
 void	ieee80211_ifdetach(struct _ifnet *);
