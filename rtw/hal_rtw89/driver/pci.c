@@ -1406,7 +1406,7 @@ static u32 __rtw89_pci_check_and_reclaim_tx_resource(struct rtw89_dev *rtwdev,
 			goto out_unlock;
 
 		bd_cnt = rtw89_pci_get_avail_txbd_num(tx_ring);
-		if (bd_cnt == 0)
+		if (bd_cnt < 64)
 			rtw89_pci_reclaim_txbd(rtwdev, tx_ring);
 	}
 

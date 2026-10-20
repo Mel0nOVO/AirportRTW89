@@ -25,7 +25,7 @@ constexpr UInt16 kRtl8852BTE = 0xb520;
 constexpr UInt16 kRtl8852CE = 0xc852;
 constexpr UInt16 kRtl8922AE = 0x8922;
 constexpr UInt16 kRtl8922AEVS = 0x892b;
-constexpr uint32_t kRtw89TxQueueSize = 256;
+constexpr uint32_t kRtw89TxQueueSize = 1024;
 }
 
 bool ItlRtw89::rtw89_match(IOPCIDevice *device)
@@ -54,6 +54,11 @@ bool ItlRtw89::attach(IOPCIDevice *device)
     const char *chipName = "embedded RTL8852A";
 
     pciDevice = device;
+    if (!txLock) {
+        txLock = IOLockAlloc();
+        if (!txLock)
+            goto fail;
+    }
     transport = Rtw89PciTransport::withDevice(device, getMainWorkLoop());
     if (!transport)
         goto fail;
@@ -155,6 +160,10 @@ fail:
         transport->release();
         transport = nullptr;
     }
+    if (txLock) {
+        IOLockFree(txLock);
+        txLock = nullptr;
+    }
     pciDevice = nullptr;
     sc.sc_hw = nullptr;
     sc.sc_rtwdev = nullptr;
@@ -185,6 +194,10 @@ void ItlRtw89::detach(IOPCIDevice *device)
     if (transport) {
         transport->release();
         transport = nullptr;
+    }
+    if (txLock) {
+        IOLockFree(txLock);
+        txLock = nullptr;
     }
     pciDevice = nullptr;
 }
@@ -641,6 +654,10 @@ void ItlRtw89::start(struct _ifnet *ifp)
     __sync_fetch_and_add(&owner->startCallCount, 1);
     struct ieee80211com *ic = &sc->sc_ic;
 
+    if (owner->txLock)
+        IOLockLock(owner->txLock);
+
+    uint32_t batchCount = 0;
     for (;;) {
         if (!rtw89LinuxTxAvailable(&owner->linuxContext)) {
             __sync_fetch_and_add(&owner->txBackpressureCount, 1);
@@ -672,10 +689,14 @@ void ItlRtw89::start(struct _ifnet *ifp)
             : static_cast<uint8_t *>(IOMalloc(length));
         if (!frame || mbuf_copydata(m, 0, length, frame) != 0 ||
             !rtw89LinuxTransmit(&owner->linuxContext, frame, length,
-                                management)) {
+                                management, management)) {
             ifp->netStat->outputErrors++;
         } else {
             ifp->netStat->outputPackets++;
+            if (!management && ++batchCount >= 32) {
+                rtw89LinuxFlushTransmit(&owner->linuxContext);
+                batchCount = 0;
+            }
         }
         if (frame && frame != stackBuffer)
             IOFree(frame, length);
@@ -683,6 +704,11 @@ void ItlRtw89::start(struct _ifnet *ifp)
         if (node)
             ieee80211_release_node(ic, node);
     }
+
+    rtw89LinuxFlushTransmit(&owner->linuxContext);
+
+    if (owner->txLock)
+        IOLockUnlock(owner->txLock);
 }
 
 void ItlRtw89::resumeTransmit(void *opaque)
@@ -695,6 +721,8 @@ void ItlRtw89::resumeTransmit(void *opaque)
         return;
     ifq_clr_oactive(&ifp->if_snd);
     start(ifp);
+    if (ifp->iface && !ifq_is_oactive(&ifp->if_snd))
+        ifp->iface->signalOutputThread();
 }
 
 void ItlRtw89::receive(void *opaque, const uint8_t *frame, size_t length,

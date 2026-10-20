@@ -84,6 +84,7 @@ private:
     struct rtw89_softc sc {};
     IOPCIDevice *pciDevice {nullptr};
     Rtw89PciTransport *transport {nullptr};
+    IOLock *txLock {nullptr};
     IOTimerEventSource *scanDwellTimer {nullptr};
     IOTimerEventSource *associationRecoveryTimer {nullptr};
     Rtw89LinuxContext linuxContext {};

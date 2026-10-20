@@ -339,7 +339,7 @@ void rtw89LinuxPowerDown(Rtw89LinuxContext *context)
 }
 
 bool rtw89LinuxTransmit(Rtw89LinuxContext *context, const uint8_t *frame,
-                        size_t length, bool management)
+                        size_t length, bool management, bool kickOff)
 {
     if (!context || !frame || length < sizeof(struct ieee80211_hdr) ||
         length > 4096)
@@ -493,10 +493,25 @@ bool rtw89LinuxTransmit(Rtw89LinuxContext *context, const uint8_t *frame,
     info->control.sta = management ? nullptr : sta;
     if (qos && (context->txAmpduMask & (1U << tid)))
         info->flags |= IEEE80211_TX_CTL_AMPDU;
-    struct ieee80211_tx_control control = {};
-    control.sta = management ? nullptr : sta;
-    hw->ops->tx(hw, &control, skb);
+    const bool immediateKick = kickOff || management || eapol || dhcp || arp;
+    uint32_t localKickMask = 0;
+    if (rtw88_tx_write_batch(hw, management ? nullptr : sta, skb,
+                             immediateKick, &localKickMask) != 0)
+        return false;
+    if (localKickMask)
+        __sync_fetch_and_or(&context->pendingKickMask, localKickMask);
     return true;
+}
+
+void rtw89LinuxFlushTransmit(Rtw89LinuxContext *context)
+{
+    if (!context || !context->started || !context->hardware)
+        return;
+    uint32_t mask = __sync_lock_test_and_set(&context->pendingKickMask, 0);
+    if (mask) {
+        auto *hw = static_cast<struct ieee80211_hw *>(context->hardware);
+        rtw88_tx_flush_kick(hw, mask);
+    }
 }
 
 bool rtw89LinuxTxAvailable(Rtw89LinuxContext *context)
@@ -759,6 +774,7 @@ bool rtw89LinuxAssociate(Rtw89LinuxContext *context,
     if (supported && vht)
         sta->deflink.vht_cap = supported->vht_cap;
 
+    rtw88_register_sta(sta);
     int result = 0;
     {
         WiphyGuard guard(hw);
@@ -781,7 +797,6 @@ bool rtw89LinuxAssociate(Rtw89LinuxContext *context,
         releaseStation(context);
         return false;
     }
-    rtw88_register_sta(sta);
 
     struct ieee80211_bss_conf *bss = &vif->bss_conf;
     bss->assoc = true;

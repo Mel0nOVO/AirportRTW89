@@ -763,7 +763,7 @@ void rtw89_phy_ra_assoc(struct rtw89_dev *rtwdev, struct rtw89_sta_link *rtwsta_
 	rtw89_macos_assoc_stage_probe(1);
 #endif
 
-	if (rssi > 40)
+	if (rssi > 40 || rssi == 0)
 		ra->init_rate_lv = 1;
 	else if (rssi > 20)
 		ra->init_rate_lv = 2;

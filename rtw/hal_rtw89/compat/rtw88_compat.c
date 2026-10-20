@@ -438,8 +438,12 @@ void rtw88_trigger_interrupt(void)
 {
     if (g_irq_handler && g_irq_dev_id) {
         int ret = g_irq_handler(0, g_irq_dev_id);
-        if (ret == IRQ_WAKE_THREAD && g_irq_thread_call) {
-            thread_call_enter(g_irq_thread_call);
+        if (ret == IRQ_WAKE_THREAD) {
+            if (g_irq_thread_fn) {
+                g_irq_thread_fn(0, g_irq_dev_id);
+            } else if (g_irq_thread_call) {
+                thread_call_enter(g_irq_thread_call);
+            }
         }
     }
 }
@@ -481,6 +485,11 @@ static void rtw88_napi_thread_wrapper(thread_call_param_t param0, thread_call_pa
     __sync_synchronize();
     __sync_lock_test_and_set(&napi->running, 0);
     __sync_synchronize();
+
+    /* NAPI has now drained RPQ and reclaimed TX descriptors; wake any stalled
+     * kext TX output queue immediately. */
+    if (g_tx_resume_cb)
+        g_tx_resume_cb();
 
     if (__sync_fetch_and_add(&napi->pending, 0) &&
         __sync_bool_compare_and_swap(&napi->running, 0, 1) &&
@@ -616,7 +625,11 @@ void ieee80211_iterate_active_interfaces(
 void ieee80211_iterate_stations_atomic(
     struct ieee80211_hw *hw,
     void (*iterator)(void *data, struct ieee80211_sta *sta),
-    void *data) {}
+    void *data)
+{
+    if (g_rtw88_sta && iterator)
+        iterator(data, g_rtw88_sta);
+}
 
 void ieee80211_iter_keys(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
     void (*iter)(struct ieee80211_hw *, struct ieee80211_vif *,

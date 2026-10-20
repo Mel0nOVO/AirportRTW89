@@ -352,6 +352,14 @@ int  rtw88_rx_ampdu_start(struct ieee80211_sta *sta, uint8_t tid,
                           uint16_t ssn, uint16_t buf_size);
 void rtw88_rx_ampdu_stop(struct ieee80211_sta *sta, uint8_t tid);
 
+struct sk_buff;
+int  rtw88_tx_write_batch(struct ieee80211_hw *hw,
+                          struct ieee80211_sta *sta,
+                          struct sk_buff *skb,
+                          bool kick_off,
+                          uint32_t *kick_mask);
+void rtw88_tx_flush_kick(struct ieee80211_hw *hw, uint32_t kick_mask);
+
 struct rtw88_hw_callbacks {
     void (*rx_frame)(void *kext_hw, struct sk_buff *skb);
     void (*tx_status)(void *kext_hw, struct sk_buff *skb);

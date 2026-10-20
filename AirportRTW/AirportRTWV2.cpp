@@ -518,13 +518,41 @@ setLinkStateGated(OSObject *target, void *arg0, void *arg1, void *arg2, void *ar
 IOReturn AirportRTW::outputStart(IONetworkInterface *interface, IOOptionBits options)
 {
     struct _ifnet *ifp = &fHalService->get80211Controller()->ic_ac.ac_if;
-    mbuf_t m = NULL;
     if (ifq_is_oactive(&ifp->if_snd))
         return kIOReturnNoResources;
-    while (kIOReturnSuccess == interface->dequeueOutputPackets(1, &m)) {
-        if (outputPacket(m, NULL)!= kIOReturnOutputSuccess ||
-            ifq_is_oactive(&ifp->if_snd))
+    if (fHalService->get80211Controller()->ic_state != IEEE80211_S_RUN ||
+        ifp->if_snd.queue == NULL) {
+        interface->flushOutputQueue();
+        return kIOReturnSuccess;
+    }
+    for (;;) {
+        uint32_t queued = 0;
+        mbuf_t m = NULL;
+        while (queued < 32 &&
+               kIOReturnSuccess == interface->dequeueOutputPackets(1, &m)) {
+            if (m == NULL) {
+                ifp->netStat->outputErrors++;
+                continue;
+            }
+            if (!(mbuf_flags(m) & MBUF_PKTHDR) || mbuf_type(m) == MBUF_TYPE_FREE) {
+                ifp->netStat->outputErrors++;
+                if (mbuf_type(m) != MBUF_TYPE_FREE)
+                    freePacket(m);
+                continue;
+            }
+            if (!ifp->if_snd.queue->lockEnqueue(m)) {
+                freePacket(m);
+                ifp->netStat->outputErrors++;
+                break;
+            }
+            queued++;
+        }
+        if (queued > 0)
+            (*ifp->if_start)(ifp);
+        if (ifq_is_oactive(&ifp->if_snd))
             return kIOReturnNoResources;
+        if (queued < 32)
+            break;
     }
     return kIOReturnSuccess;
 }

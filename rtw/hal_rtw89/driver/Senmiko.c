@@ -278,6 +278,67 @@ void rtw88_rx_ampdu_stop(struct ieee80211_sta *sta, u8 tid)
 	rtw89_chip_h2c_ba_cam(rtwdev, sta_to_rtwsta(sta), false, &params);
 }
 
+int rtw88_tx_write_batch(struct ieee80211_hw *hw,
+			 struct ieee80211_sta *sta,
+			 struct sk_buff *skb,
+			 bool kick_off,
+			 u32 *kick_mask)
+{
+	struct rtw89_dev *rtwdev;
+	struct ieee80211_tx_info *info;
+	struct ieee80211_vif *vif;
+	struct rtw89_vif *rtwvif;
+	u32 flags;
+	int ret, qsel = 0;
+
+	if (!hw || !hw->priv || !skb)
+		return -EINVAL;
+	rtwdev = to_rtw89(hw->priv);
+	info = IEEE80211_SKB_CB(skb);
+	vif = info->control.vif;
+	flags = info->flags;
+
+	if (!vif) {
+		ieee80211_free_txskb(hw, skb);
+		return -ENODEV;
+	}
+	rtwvif = vif_to_rtwvif(vif);
+
+	if (rtwvif->offchan && !(flags & IEEE80211_TX_CTL_TX_OFFCHAN) && sta) {
+		struct rtw89_sta *rtwsta = sta_to_rtwsta(sta);
+
+		skb_queue_tail(&rtwsta->roc_queue, skb);
+		return 0;
+	}
+
+	ret = rtw89_core_tx_write(rtwdev, vif, sta, skb, &qsel);
+	if (ret) {
+		rtw89_err(rtwdev, "failed to transmit skb: %d\n", ret);
+		ieee80211_free_txskb(hw, skb);
+		return ret;
+	}
+	if (kick_off) {
+		rtw89_core_tx_kick_off(rtwdev, qsel);
+	} else if (kick_mask) {
+		*kick_mask |= (1U << (qsel & 31));
+	}
+	return 0;
+}
+
+void rtw88_tx_flush_kick(struct ieee80211_hw *hw, u32 kick_mask)
+{
+	struct rtw89_dev *rtwdev;
+	u8 qsel;
+
+	if (!hw || !hw->priv || !kick_mask)
+		return;
+	rtwdev = to_rtw89(hw->priv);
+	for (qsel = 0; qsel < 32; qsel++) {
+		if (kick_mask & (1U << qsel))
+			rtw89_core_tx_kick_off(rtwdev, qsel);
+	}
+}
+
 /* ------------------------------------------------------------------ */
 /*  Scan bridges                                                       */
 /* ------------------------------------------------------------------ */

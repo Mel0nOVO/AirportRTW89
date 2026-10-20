@@ -75,6 +75,7 @@ struct Rtw89LinuxContext {
     volatile uint64_t txReportCount;
     volatile uint32_t txReportStatus;
     volatile uint32_t txReportAttempts;
+    volatile uint32_t pendingKickMask;
     void *nativeOwner;
     ReceiveCallback receive;
     TxResumeCallback txResume;
@@ -116,7 +117,8 @@ bool rtw89LinuxSetKey(Rtw89LinuxContext *context, uint8_t keyIndex,
 void rtw89LinuxDeleteKey(Rtw89LinuxContext *context, uint8_t keyIndex,
                          bool pairwise);
 bool rtw89LinuxTransmit(Rtw89LinuxContext *context, const uint8_t *frame,
-                        size_t length, bool management);
+                        size_t length, bool management, bool kickOff = true);
+void rtw89LinuxFlushTransmit(Rtw89LinuxContext *context);
 bool rtw89LinuxTxAvailable(Rtw89LinuxContext *context);
 unsigned int rtw89LinuxTxAvailableSlots(Rtw89LinuxContext *context);
 bool rtw89LinuxAmpduStart(Rtw89LinuxContext *context, uint8_t tid,
