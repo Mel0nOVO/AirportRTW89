@@ -9,6 +9,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build AirportRTW Kext
@@ -45,21 +48,29 @@ jobs:
       - name: Package Artifacts
         run: |
           mkdir -p artifacts
+          TAG_NAME="${GITHUB_REF_NAME:-v1.0.0}"
           cd build/Release/Ventura
-          zip -r -y ../../../artifacts/AirportRTW-Release.zip AirportRTW.kext
+          zip -r -y "../../../artifacts/AirportRTW-${TAG_NAME}.zip" AirportRTW.kext
           cd -
+          # Also package patch tool
+          cp tools/patch_io80211legacy.py artifacts/
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: AirportRTW-Release
-          path: artifacts/AirportRTW-Release.zip
+          path: artifacts/
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/AirportRTW-Release.zip
+          name: "AirportRTW89 ${{ github.ref_name }}"
+          files: |
+            artifacts/AirportRTW-*.zip
+            artifacts/patch_io80211legacy.py
           body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
