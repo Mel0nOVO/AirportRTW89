@@ -1132,14 +1132,12 @@ ieee80211_enqueue_data(struct ieee80211com *ic, mbuf_t m,
 #ifdef USE_APPLE_SUPPLICANT
             ml_enqueue(ml, m);
 #else
-#ifdef IO80211FAMILY_V2
             if (ieee80211_is_8021x_akm((enum ieee80211_akm)ni->ni_rsnakms)) {
                 XYLog("%s Duplicate EAPOL packet to user space\n", __FUNCTION__);
                 mbuf_dup(m, MBUF_DONTWAIT, &m2);
                 if (m2 != NULL)
                     ifp->iface->inputPacket(m2, mbuf_len(m2));
             }
-#endif
             ieee80211_eapol_key_input(ic, m, ni);
 #endif
         } else {

@@ -161,20 +161,21 @@ void AirportRTW::associateSSID(uint8_t *ssid, uint32_t ssid_len, const struct et
         authtype_upper |= APPLE80211_AUTHTYPE_WPA2;// hack
     }
     
-    if (authtype_upper & (APPLE80211_AUTHTYPE_WPA | APPLE80211_AUTHTYPE_WPA_PSK | APPLE80211_AUTHTYPE_WPA2 | APPLE80211_AUTHTYPE_WPA2_PSK | APPLE80211_AUTHTYPE_SHA256_PSK | APPLE80211_AUTHTYPE_SHA256_8021X)) {
+    if (authtype_upper & (APPLE80211_AUTHTYPE_WPA | APPLE80211_AUTHTYPE_WPA_PSK | APPLE80211_AUTHTYPE_WPA2 | APPLE80211_AUTHTYPE_WPA2_PSK | APPLE80211_AUTHTYPE_SHA256_PSK | APPLE80211_AUTHTYPE_SHA256_8021X | APPLE80211_AUTHTYPE_FT_PSK | APPLE80211_AUTHTYPE_FT_8021X | APPLE80211_AUTHTYPE_WEP_8021X)) {
         XYLog("%s %d\n", __FUNCTION__, __LINE__);
         wpa.i_protos = IEEE80211_WPA_PROTO_WPA1 | IEEE80211_WPA_PROTO_WPA2;
     }
     
-    if (authtype_upper & (APPLE80211_AUTHTYPE_WPA_PSK | APPLE80211_AUTHTYPE_WPA2_PSK | APPLE80211_AUTHTYPE_SHA256_PSK)) {
+    if (authtype_upper & (APPLE80211_AUTHTYPE_WPA_PSK | APPLE80211_AUTHTYPE_WPA2_PSK | APPLE80211_AUTHTYPE_SHA256_PSK | APPLE80211_AUTHTYPE_FT_PSK)) {
         XYLog("%s %d\n", __FUNCTION__, __LINE__);
         wpa.i_akms |= IEEE80211_WPA_AKM_PSK | IEEE80211_WPA_AKM_SHA256_PSK;
         wpa.i_enabled = 1;
-        memcpy(ic->ic_psk, key, sizeof(ic->ic_psk));
+        if (key && key_len > 0)
+            memcpy(ic->ic_psk, key, sizeof(ic->ic_psk));
         ic->ic_flags |= IEEE80211_F_PSK;
         ieee80211_ioctl_setwpaparms(ic, &wpa);
     }
-    if (authtype_upper & (APPLE80211_AUTHTYPE_WPA | APPLE80211_AUTHTYPE_WPA2 | APPLE80211_AUTHTYPE_SHA256_8021X)) {
+    if (authtype_upper & (APPLE80211_AUTHTYPE_WPA | APPLE80211_AUTHTYPE_WPA2 | APPLE80211_AUTHTYPE_SHA256_8021X | APPLE80211_AUTHTYPE_FT_8021X | APPLE80211_AUTHTYPE_WEP_8021X)) {
         XYLog("%s %d\n", __FUNCTION__, __LINE__);
         wpa.i_akms |= IEEE80211_WPA_AKM_8021X | IEEE80211_WPA_AKM_SHA256_8021X;	
         wpa.i_enabled = 1;
@@ -187,7 +188,7 @@ void AirportRTW::associateSSID(uint8_t *ssid, uint32_t ssid_len, const struct et
     }
     
     if (authtype_upper == APPLE80211_AUTHTYPE_NONE && authtype_lower == APPLE80211_AUTHTYPE_OPEN) { // Open or WEP Open System
-        if (key_len > 0) {
+        if (key_len > 0 && key) {
             XYLog("%s %d\n", __FUNCTION__, __LINE__);
             nwkey.i_wepon = IEEE80211_NWKEY_WEP;
             nwkey.i_defkid = key_index + 1;
@@ -201,11 +202,29 @@ void AirportRTW::associateSSID(uint8_t *ssid, uint32_t ssid_len, const struct et
         IEEE80211_SEND_MGMT(ic, ic->ic_bss, IEEE80211_FC0_SUBTYPE_DEAUTH, IEEE80211_REASON_AUTH_LEAVE);
     ieee80211_del_ess(ic, NULL, 0, 1);
     struct ieee80211_node *selbs = ieee80211_node_choose_bss(ic, 0, NULL);
+    if (selbs == NULL) {
+        struct ieee80211_node *ni;
+        RB_FOREACH(ni, ieee80211_tree, &ic->ic_tree) {
+            if (!is_zero && IEEE80211_ADDR_EQ(ni->ni_bssid, bssid.octet)) {
+                selbs = ni;
+                break;
+            }
+            if (ic->ic_des_esslen > 0 && ni->ni_esslen == ic->ic_des_esslen &&
+                memcmp(ni->ni_essid, ic->ic_des_essid, ic->ic_des_esslen) == 0) {
+                if (selbs == NULL || ni->ni_rssi > selbs->ni_rssi) {
+                    selbs = ni;
+                }
+            }
+        }
+    }
     if (selbs != NULL) {
-        XYLog("%s: Joining selected BSS: ssid=%s bssid=%s chan=%d\n",
+        XYLog("%s: Joining selected BSS: ssid=%s bssid=%s chan=%d rssi=%d\n",
               __FUNCTION__, selbs->ni_essid, ether_sprintf(selbs->ni_bssid),
-              ieee80211_chan2ieee(ic, selbs->ni_chan));
-        ieee80211_node_join_bss(ic, selbs, 0);
+              ieee80211_chan2ieee(ic, selbs->ni_chan), selbs->ni_rssi);
+        selbs->ni_fails = 0;
+        if (ic->ic_state != IEEE80211_S_SCAN)
+            ic->ic_state = IEEE80211_S_SCAN;
+        ieee80211_node_join_bss(ic, selbs, 1);
         fHalService->getDriverController()->clearScanningFlags();
     } else {
         XYLog("%s: Target BSS not found in scan cache, entering SCAN\n", __FUNCTION__);

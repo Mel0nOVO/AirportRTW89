@@ -483,6 +483,13 @@ bool rtw89LinuxTransmit(Rtw89LinuxContext *context, const uint8_t *frame,
             info->control.rates[index].idx = -1;
     }
 
+    if (management) {
+        info->flags |= IEEE80211_TX_CTL_REQ_TX_STATUS;
+        IOLog("AirportRTW-RTW89: Transmit management frame fc=0x%04x type=%u subtype=%u len=%zu\n",
+              frameControl, (frameControl & IEEE80211_FCTL_FTYPE) >> 2,
+              (frameControl & IEEE80211_FCTL_STYPE) >> 4, length);
+    }
+
     info->control.sta = management ? nullptr : sta;
     if (qos && (context->txAmpduMask & (1U << tid)))
         info->flags |= IEEE80211_TX_CTL_AMPDU;

@@ -1023,42 +1023,141 @@ setPOWER(OSObject *object,
 
 IOReturn AirportRTW::
 setASSOCIATE(OSObject *object,
-                             struct apple80211_assoc_data *ad)
+             struct apple80211_assoc_data *ad)
 {
-    XYLog("%s [%s] mode=%d ad_auth_lower=%d ad_auth_upper=%d rsn_ie_len=%d%s%s%s%s%s%s%s\n", __FUNCTION__, ad->ad_ssid, ad->ad_mode, ad->ad_auth_lower, ad->ad_auth_upper, ad->ad_rsn_ie_len,
-          (ad->ad_flags & 2) ? ", Instant Hotspot" : "",
-          (ad->ad_flags & 4) ? ", Auto Instant Hotspot" : "",
-          (ad->ad_rsn_ie[APPLE80211_MAX_RSN_IE_LEN] & 1) ? ", don't disassociate" : "",
-          (ad->ad_rsn_ie[APPLE80211_MAX_RSN_IE_LEN] & 2) ? ", don't blacklist" : "",
-          (ad->ad_rsn_ie[APPLE80211_MAX_RSN_IE_LEN] & 4) ? ", closed Network" : "",
-          (ad->ad_rsn_ie[APPLE80211_MAX_RSN_IE_LEN] & 8) ? ", 802.1X" : "",
-          (ad->ad_rsn_ie[APPLE80211_MAX_RSN_IE_LEN] & 0x20) ? ", force BSSID" : "");
-    
-    struct apple80211_rsn_ie_data rsn_ie_data;
-    struct apple80211_authtype_data auth_type_data;
-    struct ieee80211com *ic = fHalService->get80211Controller();
-
     if (!ad)
         return kIOReturnError;
-    
+
+    struct ieee80211com *ic = fHalService->get80211Controller();
+    const uint8_t *raw = reinterpret_cast<const uint8_t *>(ad);
+
+    char hexbuf[256];
+    int hexpos = 0;
+    for (int i = 0; i < 64 && hexpos < (int)sizeof(hexbuf) - 4; ++i) {
+        hexpos += snprintf(hexbuf + hexpos, sizeof(hexbuf) - hexpos, "%02x ", raw[i]);
+    }
+    XYLog("%s: raw hex (64B): %s\n", __FUNCTION__, hexbuf);
+
     if (ic->ic_state < IEEE80211_S_SCAN)
         ic->ic_state = IEEE80211_S_SCAN;
     
     if (ic->ic_state == IEEE80211_S_ASSOC || ic->ic_state == IEEE80211_S_AUTH)
         return kIOReturnSuccess;
 
+    uint8_t target_ssid[IEEE80211_NWID_LEN + 1] = {0};
+    uint32_t target_ssid_len = 0;
+    struct ether_addr target_bssid = ad->ad_bssid;
+    bool has_bssid = false;
+    for (int i = 0; i < IEEE80211_ADDR_LEN; i++) {
+        if (target_bssid.octet[i] != 0) {
+            has_bssid = true;
+            break;
+        }
+    }
+
+    struct ieee80211_node *matched_node = nullptr;
+
+    if (has_bssid) {
+        struct ieee80211_node *ni;
+        RB_FOREACH(ni, ieee80211_tree, &ic->ic_tree) {
+            if (IEEE80211_ADDR_EQ(ni->ni_bssid, target_bssid.octet)) {
+                matched_node = ni;
+                break;
+            }
+        }
+    }
+
+    if (!matched_node) {
+        struct ieee80211_node *ni;
+        RB_FOREACH(ni, ieee80211_tree, &ic->ic_tree) {
+            if (ni->ni_esslen >= 1 && ni->ni_esslen <= IEEE80211_NWID_LEN) {
+                for (size_t off = 10; off + ni->ni_esslen <= 64; ++off) {
+                    if (memcmp(raw + off, ni->ni_essid, ni->ni_esslen) == 0) {
+                        if (!matched_node || ni->ni_rssi > matched_node->ni_rssi) {
+                            matched_node = ni;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (matched_node) {
+        target_ssid_len = matched_node->ni_esslen;
+        memcpy(target_ssid, matched_node->ni_essid, target_ssid_len);
+        target_ssid[target_ssid_len] = '\0';
+        if (!has_bssid) {
+            memcpy(target_bssid.octet, matched_node->ni_bssid, IEEE80211_ADDR_LEN);
+            has_bssid = true;
+        }
+        XYLog("%s: Matched scan cache node: ssid='%s' bssid=%s chan=%d rssi=%d\n",
+              __FUNCTION__, target_ssid, ether_sprintf(target_bssid.octet),
+              ieee80211_chan2ieee(ic, matched_node->ni_chan), matched_node->ni_rssi);
+    } else {
+        if (ad->ad_ssid_len > 0 && ad->ad_ssid_len <= 32 &&
+            ad->ad_ssid[0] >= 0x20 && ad->ad_ssid[0] < 0x7f) {
+            target_ssid_len = ad->ad_ssid_len;
+            memcpy(target_ssid, ad->ad_ssid, target_ssid_len);
+        } else if (ad->ad_ssid[0] >= 1 && ad->ad_ssid[0] <= 32 &&
+                   ad->ad_ssid[1] >= 0x20 && ad->ad_ssid[1] < 0x7f) {
+            target_ssid_len = ad->ad_ssid[0];
+            memcpy(target_ssid, ad->ad_ssid + 1, target_ssid_len);
+        } else if (raw[16] >= 1 && raw[16] <= 32 &&
+                   raw[20] >= 0x20 && raw[20] < 0x7f) {
+            target_ssid_len = raw[16];
+            memcpy(target_ssid, raw + 20, target_ssid_len);
+        } else {
+            target_ssid_len = ad->ad_ssid_len <= 32 ? ad->ad_ssid_len : 0;
+            memcpy(target_ssid, ad->ad_ssid, target_ssid_len);
+        }
+        target_ssid[target_ssid_len] = '\0';
+        XYLog("%s: Heuristic extracted ssid='%s' len=%u\n", __FUNCTION__, target_ssid, target_ssid_len);
+    }
+
+    uint32_t auth_lower = ad->ad_auth_lower;
+    uint32_t auth_upper = ad->ad_auth_upper;
+
+    if (matched_node) {
+        bool is_privacy = (matched_node->ni_capinfo & IEEE80211_CAPINFO_PRIVACY) != 0;
+        if (!is_privacy) {
+            auth_lower = APPLE80211_AUTHTYPE_OPEN;
+            auth_upper = APPLE80211_AUTHTYPE_NONE;
+            XYLog("%s: Open network -> authtype_lower=OPEN authtype_upper=NONE\n", __FUNCTION__);
+        } else if (matched_node->ni_rsnprotos != 0) {
+            if (matched_node->ni_rsnakms & (IEEE80211_AKM_8021X | IEEE80211_AKM_SHA256_8021X)) {
+                auth_upper = APPLE80211_AUTHTYPE_WPA2;
+                auth_lower = APPLE80211_AUTHTYPE_OPEN;
+            } else {
+                auth_upper = APPLE80211_AUTHTYPE_WPA2_PSK;
+                auth_lower = APPLE80211_AUTHTYPE_OPEN;
+            }
+            if (ad->ad_auth_upper != 0 && ad->ad_auth_upper != 1)
+                auth_upper = ad->ad_auth_upper;
+        }
+    }
+
+    XYLog("%s: Final params: ssid='%s' len=%u bssid=%s lower=%u upper=%u\n",
+          __FUNCTION__, target_ssid, target_ssid_len,
+          ether_sprintf(target_bssid.octet), auth_lower, auth_upper);
+
     if (ad->ad_mode != APPLE80211_AP_MODE_IBSS) {
         disassocIsVoluntary = false;
+        struct apple80211_authtype_data auth_type_data;
         auth_type_data.version = APPLE80211_VERSION;
-        auth_type_data.authtype_upper = ad->ad_auth_upper;
-        auth_type_data.authtype_lower = ad->ad_auth_lower;
+        auth_type_data.authtype_upper = auth_upper;
+        auth_type_data.authtype_lower = auth_lower;
         setAUTH_TYPE(object, &auth_type_data);
-        rsn_ie_data.version = APPLE80211_VERSION;
-        rsn_ie_data.len = ad->ad_rsn_ie[1] + 2;
-        memcpy(rsn_ie_data.ie, ad->ad_rsn_ie, rsn_ie_data.len);
-        setRSN_IE(object, &rsn_ie_data);
 
-        associateSSID(ad->ad_ssid, ad->ad_ssid_len, ad->ad_bssid, ad->ad_auth_lower, ad->ad_auth_upper, ad->ad_key.key, ad->ad_key.key_len, ad->ad_key.key_index);
+        if (ad->ad_rsn_ie_len > 0) {
+            struct apple80211_rsn_ie_data rsn_ie_data;
+            rsn_ie_data.version = APPLE80211_VERSION;
+            rsn_ie_data.len = ad->ad_rsn_ie[1] + 2;
+            memcpy(rsn_ie_data.ie, ad->ad_rsn_ie, rsn_ie_data.len);
+            setRSN_IE(object, &rsn_ie_data);
+        }
+
+        associateSSID(target_ssid, target_ssid_len, target_bssid, auth_lower, auth_upper,
+                      ad->ad_key.key, ad->ad_key.key_len, ad->ad_key.key_index);
     }
     return kIOReturnSuccess;
 }
