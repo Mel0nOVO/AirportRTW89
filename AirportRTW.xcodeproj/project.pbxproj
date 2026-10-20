@@ -2552,6 +2552,7 @@
 /* Begin PBXShellScriptBuildPhase section */
 		A89C00012F00000000000001 /* Build RTW89 C Archive */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
@@ -2567,6 +2568,7 @@
 		};
 		A89C00012F00000000000002 /* Build RTW89 C Archive */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
@@ -2582,6 +2584,7 @@
 		};
 		A89C00012F00000000000003 /* Build RTW89 C Archive */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
