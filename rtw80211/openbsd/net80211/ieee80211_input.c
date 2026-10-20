@@ -2018,12 +2018,23 @@ ieee80211_recv_probe_resp(struct ieee80211com *ic, mbuf_t m,
             ni->ni_flags &= ~IEEE80211_NODE_QOS;
     }
     
+    const u_int8_t *ie_start = ((const u_int8_t *)&wh[1]) + 8 + 2 + 2;
+    if (efrm > ie_start) {
+        uint32_t tlv_len = (uint32_t)(efrm - ie_start);
+        if (ic->ic_state == IEEE80211_S_SCAN ||
+            (ic->ic_flags & IEEE80211_F_BGSCAN)) {
+            ieee80211_save_ie_tlv(ie_start, &ni->ni_rsnie_tlv, &ni->ni_rsnie_tlv_len, tlv_len);
+        } else if (ic->ic_state == IEEE80211_S_RUN && ic->ic_bss != NULL &&
+                   IEEE80211_ADDR_EQ(wh->i_addr3, ic->ic_bss->ni_bssid)) {
+            ieee80211_save_ie_tlv(ie_start, &ic->ic_bss->ni_rsnie_tlv, &ic->ic_bss->ni_rsnie_tlv_len, tlv_len);
+            if (ni != ic->ic_bss)
+                ieee80211_save_ie_tlv(ie_start, &ni->ni_rsnie_tlv, &ni->ni_rsnie_tlv_len, tlv_len);
+        }
+    }
+
     if (ic->ic_state == IEEE80211_S_SCAN ||
         (ic->ic_flags & IEEE80211_F_BGSCAN)) {
         struct ieee80211_rsnparams rsn, wpa;
-        
-        uint32_t tlv_len = (mtod(m, u_int8_t *) + mbuf_len(m)) - (u_int8_t *)&wh[1] + 1 - 8 - 2 - 2;
-        ieee80211_save_ie_tlv(((u_int8_t *)&wh[1]) + 8 + 2 + 2, &ni->ni_rsnie_tlv, &ni->ni_rsnie_tlv_len, tlv_len);
         ni->ni_rsnprotos = IEEE80211_PROTO_NONE;
         ni->ni_supported_rsnprotos = IEEE80211_PROTO_NONE;
         ni->ni_rsnakms = 0;

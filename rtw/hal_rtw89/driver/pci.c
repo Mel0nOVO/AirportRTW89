@@ -1398,7 +1398,7 @@ static u32 __rtw89_pci_check_and_reclaim_tx_resource(struct rtw89_dev *rtwdev,
 	bd_cnt = rtw89_pci_get_avail_txbd_num(tx_ring);
 	wd_cnt = wd_ring->curr_num;
 
-	if (wd_cnt == 0 || bd_cnt == 0) {
+	if (wd_cnt < 64 || bd_cnt < 64) {
 		cnt = rtw89_pci_rxbd_recalc(rtwdev, rx_ring);
 		if (cnt)
 			rtw89_pci_release_tx(rtwdev, rx_ring, cnt);

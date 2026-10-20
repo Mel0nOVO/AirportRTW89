@@ -327,12 +327,24 @@ init(IOService *provider)
 IOReturn AirportRTWSkywalkInterface::
 getSSID(struct apple80211_ssid_data *sd)
 {
+    if (!sd)
+        return kIOReturnError;
     struct ieee80211com * ic = fHalService->get80211Controller();
+    if (!ic)
+        return kIOReturnError;
     if (ic->ic_state == IEEE80211_S_RUN) {
         memset(sd, 0, sizeof(*sd));
         sd->version = APPLE80211_VERSION;
-        memcpy(sd->ssid_bytes, ic->ic_des_essid, strlen((const char*)ic->ic_des_essid));
-        sd->ssid_len = (uint32_t)strlen((const char*)ic->ic_des_essid);
+        if (ic->ic_bss != NULL && ic->ic_bss->ni_esslen > 0) {
+            sd->ssid_len = MIN((uint32_t)ic->ic_bss->ni_esslen, (uint32_t)IEEE80211_NWID_LEN);
+            memcpy(sd->ssid_bytes, ic->ic_bss->ni_essid, sd->ssid_len);
+        } else if (ic->ic_des_esslen > 0) {
+            sd->ssid_len = MIN((uint32_t)ic->ic_des_esslen, (uint32_t)IEEE80211_NWID_LEN);
+            memcpy(sd->ssid_bytes, ic->ic_des_essid, sd->ssid_len);
+        } else {
+            sd->ssid_len = (uint32_t)strnlen((const char*)ic->ic_des_essid, IEEE80211_NWID_LEN);
+            memcpy(sd->ssid_bytes, ic->ic_des_essid, sd->ssid_len);
+        }
         return kIOReturnSuccess;
     }
     return 6;
@@ -678,8 +690,9 @@ getRSSI(struct apple80211_rssi_data *rd)
 IOReturn AirportRTWSkywalkInterface::
 getRSN_IE(struct apple80211_rsn_ie_data *data)
 {
-#ifdef USE_APPLE_SUPPLICANT
     struct ieee80211com *ic = fHalService->get80211Controller();
+    if (!data || !ic)
+        return kIOReturnError;
     if (ic->ic_bss == NULL || ic->ic_bss->ni_rsnie == NULL) {
         return kIOReturnError;
     }
@@ -693,39 +706,116 @@ getRSN_IE(struct apple80211_rsn_ie_data *data)
         memcpy(data->ie, ic->ic_bss->ni_rsnie, data->len);
     }
     return kIOReturnSuccess;
-#else
-    return kIOReturnUnsupported;
-#endif
 }
 
 IOReturn AirportRTWSkywalkInterface::
 setRSN_IE(struct apple80211_rsn_ie_data *data)
 {
-#ifdef USE_APPLE_SUPPLICANT
     struct ieee80211com *ic = fHalService->get80211Controller();
-    if (!data)
+    if (!data || !ic)
         return kIOReturnError;
     static_assert(sizeof(ic->ic_rsn_ie_override) == APPLE80211_MAX_RSN_IE_LEN, "Max RSN IE length mismatch");
     memcpy(ic->ic_rsn_ie_override, data->ie, APPLE80211_MAX_RSN_IE_LEN);
     if (ic->ic_state == IEEE80211_S_RUN && ic->ic_bss != nullptr)
         ieee80211_save_ie(data->ie, &ic->ic_bss->ni_rsnie);
     return kIOReturnSuccess;
-#else
-    return kIOReturnUnsupported;
-#endif
 }
 
 IOReturn AirportRTWSkywalkInterface::
 getAP_IE_LIST(struct apple80211_ap_ie_data *data)
 {
-    struct ieee80211com *ic = fHalService->get80211Controller();
     if (!data)
         return kIOReturnError;
-    if (ic->ic_bss == NULL || ic->ic_bss->ni_rsnie_tlv == NULL || ic->ic_bss->ni_rsnie_tlv_len == 0 || ic->ic_bss->ni_rsnie_tlv_len > data->len || ic->ic_bss->ni_rsnie_tlv_len > 1024)
+    struct ieee80211com *ic = fHalService->get80211Controller();
+    if (!ic)
         return kIOReturnError;
+
+    const uint8_t *ie_src = nullptr;
+    size_t ie_len = 0;
+
+    if (ic->ic_bss != nullptr && ic->ic_bss->ni_rsnie_tlv != nullptr && ic->ic_bss->ni_rsnie_tlv_len > 0) {
+        ie_src = ic->ic_bss->ni_rsnie_tlv;
+        ie_len = ic->ic_bss->ni_rsnie_tlv_len;
+    }
+
+    if (!ie_src && ic->ic_bss != nullptr) {
+        struct ieee80211_node *ni;
+        RB_FOREACH(ni, ieee80211_tree, &ic->ic_tree) {
+            if (IEEE80211_ADDR_EQ(ni->ni_bssid, ic->ic_bss->ni_bssid) &&
+                ni->ni_rsnie_tlv != nullptr && ni->ni_rsnie_tlv_len > 0) {
+                ie_src = ni->ni_rsnie_tlv;
+                ie_len = ni->ni_rsnie_tlv_len;
+                break;
+            }
+        }
+    }
+
+    bool has_ssid_ie = false;
+    size_t valid_len = 0;
+    if (ie_src && ie_len > 0) {
+        size_t off = 0;
+        while (off + 2 <= ie_len) {
+            uint8_t tag = ie_src[off];
+            size_t elen = (size_t)ie_src[off + 1] + 2;
+            if (off + elen > ie_len)
+                break;
+            if (tag == IEEE80211_ELEMID_SSID)
+                has_ssid_ie = true;
+            off += elen;
+        }
+        valid_len = off;
+    }
+
+    const size_t max_buf = APPLE80211_NETWORK_DATA_MAX_IE_LEN;
     data->version = APPLE80211_VERSION;
-    data->len = ic->ic_bss->ni_rsnie_tlv_len;
-    memcpy(data->ie_data, ic->ic_bss->ni_rsnie_tlv, data->len);
+
+    if (ie_src && valid_len > 0 && has_ssid_ie) {
+        data->len = (uint32_t)MIN(valid_len, max_buf);
+        memcpy(data->ie_data, ie_src, data->len);
+        return kIOReturnSuccess;
+    }
+
+    uint8_t synth_buf[max_buf];
+    size_t synth_len = 0;
+
+    const uint8_t *ssid_bytes = ic->ic_des_essid;
+    uint32_t ssid_len = ic->ic_des_esslen;
+    if (ic->ic_bss != nullptr && ic->ic_bss->ni_esslen > 0) {
+        ssid_bytes = ic->ic_bss->ni_essid;
+        ssid_len = ic->ic_bss->ni_esslen;
+    }
+    if (ssid_len > IEEE80211_NWID_LEN)
+        ssid_len = (uint32_t)strnlen((const char *)ssid_bytes, IEEE80211_NWID_LEN);
+
+    synth_buf[synth_len++] = IEEE80211_ELEMID_SSID;
+    synth_buf[synth_len++] = (uint8_t)ssid_len;
+    if (ssid_len > 0) {
+        memcpy(synth_buf + synth_len, ssid_bytes, ssid_len);
+        synth_len += ssid_len;
+    }
+
+    if (ic->ic_bss != nullptr && ic->ic_bss->ni_rates.rs_nrates > 0) {
+        uint8_t nrates = MIN(ic->ic_bss->ni_rates.rs_nrates, (uint8_t)8);
+        synth_buf[synth_len++] = IEEE80211_ELEMID_RATES;
+        synth_buf[synth_len++] = nrates;
+        memcpy(synth_buf + synth_len, ic->ic_bss->ni_rates.rs_rates, nrates);
+        synth_len += nrates;
+    }
+
+    if (ie_src && valid_len > 0) {
+        size_t copy_len = MIN(valid_len, max_buf - synth_len);
+        memcpy(synth_buf + synth_len, ie_src, copy_len);
+        synth_len += copy_len;
+    } else if (ic->ic_bss != nullptr && ic->ic_bss->ni_rsnie != nullptr && ic->ic_bss->ni_rsnie[1] > 0) {
+        size_t rsn_total = 2 + ic->ic_bss->ni_rsnie[1];
+        if (synth_len + rsn_total <= max_buf) {
+            memcpy(synth_buf + synth_len, ic->ic_bss->ni_rsnie, rsn_total);
+            synth_len += rsn_total;
+        }
+    }
+
+    data->len = (uint32_t)synth_len;
+    memcpy(data->ie_data, synth_buf, synth_len);
     return kIOReturnSuccess;
 }
 
@@ -1093,7 +1183,24 @@ static int convertNodeToScanResult(ItlHalService *fHalService, struct ieee80211_
         result->asr_ie_len = fNextNodeToSend->ni_rsnie_tlv_len;
         memcpy(result->asr_ie_data, fNextNodeToSend->ni_rsnie_tlv, MIN(result->asr_ie_len, sizeof(result->asr_ie_data)));
     } else {
-        result->asr_ie_len = 0;
+        uint8_t fallback_buf[128];
+        size_t fallback_len = 0;
+        uint32_t slen = MIN((uint32_t)fNextNodeToSend->ni_esslen, (uint32_t)IEEE80211_NWID_LEN);
+        fallback_buf[fallback_len++] = IEEE80211_ELEMID_SSID;
+        fallback_buf[fallback_len++] = (uint8_t)slen;
+        if (slen > 0) {
+            memcpy(fallback_buf + fallback_len, fNextNodeToSend->ni_essid, slen);
+            fallback_len += slen;
+        }
+        if (fNextNodeToSend->ni_rates.rs_nrates > 0) {
+            uint8_t nr = MIN(fNextNodeToSend->ni_rates.rs_nrates, (uint8_t)8);
+            fallback_buf[fallback_len++] = IEEE80211_ELEMID_RATES;
+            fallback_buf[fallback_len++] = nr;
+            memcpy(fallback_buf + fallback_len, fNextNodeToSend->ni_rates.rs_rates, nr);
+            fallback_len += nr;
+        }
+        result->asr_ie_len = (uint32_t)MIN(fallback_len, sizeof(result->asr_ie_data));
+        memcpy(result->asr_ie_data, fallback_buf, result->asr_ie_len);
     }
     result->asr_beacon_int = fNextNodeToSend->ni_intval;
     for (int i = 0; i < result->asr_nrates; i++ )
