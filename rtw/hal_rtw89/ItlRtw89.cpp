@@ -302,6 +302,7 @@ bool ItlRtw89::attachNet80211()
                   IEEE80211_C_QOS | IEEE80211_C_TX_AMPDU |
                   IEEE80211_C_AMSDU_IN_AMPDU |
                   IEEE80211_C_SUPPORTS_VHT_EXT_NSS_BW;
+    ic->ic_flags |= (IEEE80211_F_HTON | IEEE80211_F_VHTON);
     ic->ic_htcaps = IEEE80211_HTCAP_SGI20 |
                     IEEE80211_HTCAP_CBW20_40 | IEEE80211_HTCAP_SGI40 |
                     IEEE80211_HTCAP_LDPC |
@@ -665,7 +666,10 @@ void ItlRtw89::start(struct _ifnet *ifp)
         }
 
         const size_t length = mbuf_pkthdr_len(m);
-        uint8_t *frame = static_cast<uint8_t *>(IOMalloc(length));
+        uint8_t stackBuffer[2048];
+        uint8_t *frame = length <= sizeof(stackBuffer)
+            ? stackBuffer
+            : static_cast<uint8_t *>(IOMalloc(length));
         if (!frame || mbuf_copydata(m, 0, length, frame) != 0 ||
             !rtw89LinuxTransmit(&owner->linuxContext, frame, length,
                                 management)) {
@@ -673,7 +677,7 @@ void ItlRtw89::start(struct _ifnet *ifp)
         } else {
             ifp->netStat->outputPackets++;
         }
-        if (frame)
+        if (frame && frame != stackBuffer)
             IOFree(frame, length);
         mbuf_freem(m);
         if (node)

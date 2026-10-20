@@ -144,7 +144,11 @@ u32 rtw88_be_ring_avail(struct rtw_dev *rtwdev_opaque)
 	else
 		avail = bd_ring->len - (bd_ring->wp - bd_ring->rp) - 1;
 
-	return min(avail, tx_ring->wd_ring.curr_num);
+	avail = min(avail, tx_ring->wd_ring.curr_num);
+	if (avail <= 16) {
+		avail = rtw89_hci_check_and_reclaim_tx_resource(rtwdev, txch);
+	}
+	return avail;
 }
 
 /* Dump SW-side BE TX ring + device state.  Called by the kext's periodic

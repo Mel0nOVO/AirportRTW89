@@ -822,7 +822,7 @@ setASSOCIATE(struct apple80211_assoc_data *ad)
             if (ni->ni_esslen >= 1 && ni->ni_esslen <= IEEE80211_NWID_LEN) {
                 for (size_t off = 10; off + ni->ni_esslen <= 64; ++off) {
                     if (memcmp(raw + off, ni->ni_essid, ni->ni_esslen) == 0) {
-                        if (!matched_node || ni->ni_rssi > matched_node->ni_rssi) {
+                        if (!matched_node || ieee80211_ess_is_better(ic, matched_node, ni)) {
                             matched_node = ni;
                         }
                     }
