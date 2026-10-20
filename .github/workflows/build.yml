@@ -1,0 +1,65 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build AirportRTW Kext
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_15.4.app || true
+
+      - name: Build AirportRTW (Release)
+        run: |
+          xcodebuild -project AirportRTW.xcodeproj \
+                     -target "AirportRTW-Ventura" \
+                     -configuration Release \
+                     build
+
+      - name: Verify Kext Symbols
+        run: |
+          KEXT_PATH="build/Release/Ventura/AirportRTW.kext/Contents/MacOS/AirportRTW"
+          echo "Checking for undefined RTW symbols..."
+          UNDEFINED=$(nm -g "$KEXT_PATH" | grep " U _rtw" || true)
+          if [ -n "$UNDEFINED" ]; then
+            echo "Error: Found undefined rtw symbols:"
+            echo "$UNDEFINED"
+            exit 1
+          fi
+          echo "Symbol validation passed!"
+
+      - name: Package Artifacts
+        run: |
+          mkdir -p artifacts
+          cd build/Release/Ventura
+          zip -r -y ../../../artifacts/AirportRTW-Release.zip AirportRTW.kext
+          cd -
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AirportRTW-Release
+          path: artifacts/AirportRTW-Release.zip
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/AirportRTW-Release.zip
+          body_path: RELEASE_NOTES.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
