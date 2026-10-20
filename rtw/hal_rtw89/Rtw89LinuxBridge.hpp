@@ -97,7 +97,10 @@ bool rtw89LinuxAssociate(Rtw89LinuxContext *context,
                          const uint8_t bssid[6], uint16_t aid,
                          uint16_t capability, uint16_t channel,
                          uint16_t beaconInterval, uint8_t dtimPeriod,
-                         bool qos, bool ht, bool vht, uint8_t rxNss);
+                         bool qos, bool ht, bool vht, uint8_t rxNss,
+                         uint8_t chanWidth = 0,
+                         uint16_t centerFreq1 = 0,
+                         uint16_t centerFreq2 = 0);
 void rtw89LinuxDisassociate(Rtw89LinuxContext *context);
 
 enum Rtw89NativeCipher : uint8_t {

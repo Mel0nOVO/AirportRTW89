@@ -688,7 +688,9 @@ bool rtw89LinuxAssociate(Rtw89LinuxContext *context,
                          const uint8_t bssid[6], uint16_t aid,
                          uint16_t capability, uint16_t channel,
                          uint16_t beaconInterval, uint8_t dtimPeriod,
-                         bool qos, bool ht, bool vht, uint8_t rxNss)
+                         bool qos, bool ht, bool vht, uint8_t rxNss,
+                         uint8_t chanWidth, uint16_t centerFreq1,
+                         uint16_t centerFreq2)
 {
     if (!context || !bssid || aid == 0 || aid > 2007)
         return false;
@@ -697,6 +699,38 @@ bool rtw89LinuxAssociate(Rtw89LinuxContext *context,
     if (!hw || !hw->ops || !vif ||
         !rtw89LinuxPrepareConnection(context, bssid, channel))
         return false;
+
+    enum ieee80211_sta_rx_bandwidth bw = IEEE80211_STA_RX_BW_20;
+    enum nl80211_chan_width chandef_width = NL80211_CHAN_WIDTH_20;
+    switch (chanWidth) {
+    case 2: // IEEE80211_CHAN_WIDTH_40
+        bw = IEEE80211_STA_RX_BW_40;
+        chandef_width = NL80211_CHAN_WIDTH_40;
+        break;
+    case 3: // IEEE80211_CHAN_WIDTH_80
+        bw = IEEE80211_STA_RX_BW_80;
+        chandef_width = NL80211_CHAN_WIDTH_80;
+        break;
+    case 4: // IEEE80211_CHAN_WIDTH_80P80
+    case 5: // IEEE80211_CHAN_WIDTH_160
+        bw = IEEE80211_STA_RX_BW_160;
+        chandef_width = NL80211_CHAN_WIDTH_160;
+        break;
+    default:
+        bw = IEEE80211_STA_RX_BW_20;
+        chandef_width = NL80211_CHAN_WIDTH_20;
+        break;
+    }
+
+    if (chandef_width != NL80211_CHAN_WIDTH_20 ||
+        (centerFreq1 && centerFreq1 != hw->conf.chandef.center_freq1)) {
+        hw->conf.chandef.width = chandef_width;
+        if (centerFreq1)
+            hw->conf.chandef.center_freq1 = centerFreq1;
+        if (centerFreq2)
+            hw->conf.chandef.center_freq2 = centerFreq2;
+        rtw88_connect_hw_setup(hw, vif, bssid);
+    }
 
     rtw89LinuxDisassociate(context);
     context->stationAllocationSize = sizeof(struct ieee80211_sta) +
@@ -715,7 +749,7 @@ bool rtw89LinuxAssociate(Rtw89LinuxContext *context,
     sta->deflink.supp_rates[NL80211_BAND_2GHZ] = 0xfff;
     sta->deflink.supp_rates[NL80211_BAND_5GHZ] = 0xff;
     sta->deflink.supp_rates[NL80211_BAND_6GHZ] = 0xff;
-    sta->deflink.bandwidth = IEEE80211_STA_RX_BW_20;
+    sta->deflink.bandwidth = bw;
     sta->deflink.rx_nss = rxNss ? rxNss : 1;
     const enum nl80211_band band = channel <= 14 ? NL80211_BAND_2GHZ
                                                   : NL80211_BAND_5GHZ;

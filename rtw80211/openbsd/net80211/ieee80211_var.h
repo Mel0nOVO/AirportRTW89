@@ -698,6 +698,7 @@ void	ieee80211_set_ess(struct ieee80211com *, struct ieee80211_ess *,
 	    struct ieee80211_node *);
 void    ieee80211_deselect_ess(struct ieee80211com *);
 struct ieee80211_ess *ieee80211_get_ess(struct ieee80211com *, const char *, int);
+int     ieee80211_ess_is_better(struct ieee80211com *, struct ieee80211_node *, struct ieee80211_node *);
 void ieee80211_begin_cache_bgscan(struct _ifnet *);
 
 extern	int ieee80211_cache_size;

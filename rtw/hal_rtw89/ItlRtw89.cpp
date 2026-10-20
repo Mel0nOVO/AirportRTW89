@@ -299,11 +299,36 @@ bool ItlRtw89::attachNet80211()
     ic->ic_caps = IEEE80211_C_WEP | IEEE80211_C_RSN |
                   IEEE80211_C_SCANALL | IEEE80211_C_SCANALLBAND |
                   IEEE80211_C_SHSLOT | IEEE80211_C_SHPREAMBLE |
-                  IEEE80211_C_QOS | IEEE80211_C_TX_AMPDU;
+                  IEEE80211_C_QOS | IEEE80211_C_TX_AMPDU |
+                  IEEE80211_C_AMSDU_IN_AMPDU |
+                  IEEE80211_C_SUPPORTS_VHT_EXT_NSS_BW;
     ic->ic_htcaps = IEEE80211_HTCAP_SGI20 |
                     IEEE80211_HTCAP_CBW20_40 | IEEE80211_HTCAP_SGI40 |
                     IEEE80211_HTCAP_LDPC |
+                    IEEE80211_HTCAP_TXSTBC |
+                    (1 << IEEE80211_HTCAP_RXSTBC_SHIFT) |
                     (IEEE80211_HTCAP_SMPS_DIS << IEEE80211_HTCAP_SMPS_SHIFT);
+    for (int i = 0; i < 16; i++)
+        setbit(ic->ic_sup_mcs, i);
+
+    ic->ic_vhtcaps = IEEE80211_VHTCAP_MAX_MPDU_LENGTH_11454 |
+                     IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_160MHZ |
+                     IEEE80211_VHTCAP_RXLDPC |
+                     IEEE80211_VHTCAP_SHORT_GI_80 |
+                     IEEE80211_VHTCAP_SHORT_GI_160 |
+                     IEEE80211_VHTCAP_TXSTBC |
+                     IEEE80211_VHTCAP_RXSTBC_1 |
+                     IEEE80211_VHTCAP_SU_BEAMFORMEE_CAPABLE |
+                     IEEE80211_VHTCAP_MU_BEAMFORMEE_CAPABLE |
+                     (3 << IEEE80211_VHTCAP_BEAMFORMEE_STS_SHIFT) |
+                     (IEEE80211_VHTCAP_MAX_AMPDU_1024K << IEEE80211_VHTCAP_MAX_A_MPDU_LENGTH_EXPONENT_SHIFT);
+    ic->ic_vht_rx_mcs_map = 0xfffa; // 2 streams MCS 0-9
+    ic->ic_vht_tx_mcs_map = 0xfffa;
+    ic->ic_vht_rx_highest = 867;
+    ic->ic_vht_tx_highest = 867;
+    for (int i = 0; i <= 9; i++)
+        setbit(ic->ic_vht_sup_mcs, i);
+
     ic->ic_ampdu_params = IEEE80211_AMPDU_PARAM_SS_4 | 0x3;
     ic->ic_max_rssi = 100;
     ic->ic_sup_rates[IEEE80211_MODE_11A] = ieee80211_std_rateset_11a;
@@ -326,7 +351,8 @@ bool ItlRtw89::attachNet80211()
         entry->ic_flags = channel <= 14
             ? IEEE80211_CHAN_2GHZ | IEEE80211_CHAN_DYN |
               IEEE80211_CHAN_CCK | IEEE80211_CHAN_OFDM | IEEE80211_CHAN_HT20
-            : IEEE80211_CHAN_5GHZ | IEEE80211_CHAN_OFDM | IEEE80211_CHAN_HT20;
+            : IEEE80211_CHAN_5GHZ | IEEE80211_CHAN_OFDM |
+              IEEE80211_CHAN_HT | IEEE80211_CHAN_VHT;
     }
     ic->ic_ibss_chan = &ic->ic_channels[1];
 
@@ -891,15 +917,18 @@ int ItlRtw89::newstate(struct ieee80211com *ic,
          * preserve, leaving an otherwise valid HT node without NODE_QOS.
          * HT itself requires QoS, so restore that implied capability before
          * net80211 begins transmitting data. */
-        if (ht && !qos) {
+        if ((ht || vht) && !qos) {
             node->ni_flags |= IEEE80211_NODE_QOS;
             ic->ic_flags |= IEEE80211_F_QOS;
             qos = true;
         }
-        const uint8_t nss = node->ni_rxmcs[1] ? 2 : 1;
+        const uint8_t nss = node->ni_rx_nss ? node->ni_rx_nss : (node->ni_rxmcs[1] ? 2 : 1);
+        const uint16_t cf1 = node->ni_chan ? node->ni_chan->ic_center_freq1 : 0;
+        const uint16_t cf2 = node->ni_chan ? node->ni_chan->ic_center_freq2 : 0;
         if (!rtw89LinuxAssociate(&owner->linuxContext, node->ni_bssid, aid,
                                  node->ni_capinfo, channel, node->ni_intval,
-                                 node->ni_dtimperiod, qos, ht, vht, nss)) {
+                                 node->ni_dtimperiod, qos, ht, vht, nss,
+                                 node->ni_chw, cf1, cf2)) {
             if (endedScan) {
                 rtw89LinuxScanBegin(&owner->linuxContext);
                 sc->sc_flags |= RTW89_FLAG_SCANNING;
@@ -942,9 +971,13 @@ int ItlRtw89::newstate(struct ieee80211com *ic,
      * net80211 ADDBA exchange once RUN is established.  Hardware aggregation
      * is still enabled only by ampduTxStart() after a successful AP response. */
     if (state == IEEE80211_S_RUN && node &&
-        (node->ni_flags & IEEE80211_NODE_HT) &&
-        (node->ni_flags & IEEE80211_NODE_QOS))
+        (node->ni_flags & (IEEE80211_NODE_HT | IEEE80211_NODE_VHT)) &&
+        (node->ni_flags & IEEE80211_NODE_QOS)) {
         ieee80211_node_trigger_addba_req(node, EDCA_AC_BE);
+        ieee80211_node_trigger_addba_req(node, EDCA_AC_BK);
+        ieee80211_node_trigger_addba_req(node, EDCA_AC_VI);
+        ieee80211_node_trigger_addba_req(node, EDCA_AC_VO);
+    }
     if (state == IEEE80211_S_SCAN && owner->scanDwellTimer)
         owner->scanDwellTimer->setTimeoutMS(120);
     return 0;

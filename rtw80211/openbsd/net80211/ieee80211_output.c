@@ -489,21 +489,9 @@ ieee80211_classify(struct ieee80211com *ic, mbuf_t m)
 int
 ieee80211_can_use_ampdu(struct ieee80211com *ic, struct ieee80211_node *ni)
 {
-	return (ni->ni_flags & IEEE80211_NODE_HT) &&
+	return (ni->ni_flags & (IEEE80211_NODE_HT | IEEE80211_NODE_VHT)) &&
     (ic->ic_caps & IEEE80211_C_TX_AMPDU) &&
-    !(ic->ic_opmode == IEEE80211_M_STA && ni != ic->ic_bss) &&
-    /*
-     * Don't use A-MPDU on non-encrypted networks. There are devices
-     * with buggy firmware which allow an attacker to inject 802.11
-     * frames into a wifi network by embedding rouge A-MPDU subframes
-     * in an arbitrary data payload (e.g. PNG images) which may end
-     * up appearing as actual frames after de-aggregation by a buggy
-     * device; see https://github.com/rpp0/aggr-inject for details.
-     * WPA2 prevents this injection attack since the attacker would
-     * need to inject frames which get decrypted correctly.
-     */
-    ((ic->ic_flags & IEEE80211_F_RSNON) &&
-      (ni->ni_rsnprotos & IEEE80211_PROTO_RSN));
+    !(ic->ic_opmode == IEEE80211_M_STA && ni != ic->ic_bss);
 }
 
 void

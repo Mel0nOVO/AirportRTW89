@@ -184,7 +184,7 @@ void AirportRTWSkywalkInterface::associateSSID(uint8_t *ssid, uint32_t ssid_len,
             }
             if (ic->ic_des_esslen > 0 && ni->ni_esslen == ic->ic_des_esslen &&
                 memcmp(ni->ni_essid, ic->ic_des_essid, ic->ic_des_esslen) == 0) {
-                if (selbs == NULL || ni->ni_rssi > selbs->ni_rssi) {
+                if (selbs == NULL || ieee80211_ess_is_better(ic, selbs, ni)) {
                     selbs = ni;
                 }
             }
