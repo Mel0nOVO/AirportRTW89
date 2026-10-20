@@ -363,6 +363,7 @@ void ItlRtw89::watchdog(struct _ifnet *ifp)
     auto *sc = ifp ? static_cast<struct rtw89_softc *>(ifp->if_softc) : nullptr;
     if (!sc)
         return;
+    ieee80211_watchdog(ifp);
     auto *owner = container_of(sc, ItlRtw89, sc);
     if (sc->sc_ic.ic_state == IEEE80211_S_RUN) {
         if (owner->associationRunWatchdogTicks < 5)

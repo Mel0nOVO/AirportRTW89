@@ -714,6 +714,7 @@ bool rtw89LinuxAssociate(Rtw89LinuxContext *context,
     memcpy(sta->deflink.addr, bssid, ETH_ALEN);
     sta->deflink.supp_rates[NL80211_BAND_2GHZ] = 0xfff;
     sta->deflink.supp_rates[NL80211_BAND_5GHZ] = 0xff;
+    sta->deflink.supp_rates[NL80211_BAND_6GHZ] = 0xff;
     sta->deflink.bandwidth = IEEE80211_STA_RX_BW_20;
     sta->deflink.rx_nss = rxNss ? rxNss : 1;
     const enum nl80211_band band = channel <= 14 ? NL80211_BAND_2GHZ

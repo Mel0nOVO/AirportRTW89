@@ -302,8 +302,19 @@ setCIPHER_KEY(OSObject *object, struct apple80211_key *key)
         case APPLE80211_CIPHER_PMK:
             XYLog("Setting WPA PMK is not supported\n");
             break;
+        case APPLE80211_CIPHER_MSK:
+            XYLog("Setting MSK\n");
+            if (fHalService->get80211Controller()->ic_bss) {
+                ieee80211_pmksa_add(fHalService->get80211Controller(), IEEE80211_AKM_8021X,
+                                    fHalService->get80211Controller()->ic_bss->ni_macaddr, key->key, 0);
+            }
+            break;
         case APPLE80211_CIPHER_PMKSA:
-            XYLog("Setting WPA PMKSA is not supported\n");
+            XYLog("Setting WPA PMKSA\n");
+            if (fHalService->get80211Controller()->ic_bss) {
+                ieee80211_pmksa_add(fHalService->get80211Controller(), IEEE80211_AKM_8021X,
+                                    fHalService->get80211Controller()->ic_bss->ni_macaddr, key->key, 0);
+            }
             break;
     }
     //fInterface->postMessage(APPLE80211_M_CIPHER_KEY_CHANGED);
@@ -1041,8 +1052,18 @@ setASSOCIATE(OSObject *object,
     if (ic->ic_state < IEEE80211_S_SCAN)
         ic->ic_state = IEEE80211_S_SCAN;
     
-    if (ic->ic_state == IEEE80211_S_ASSOC || ic->ic_state == IEEE80211_S_AUTH)
-        return kIOReturnSuccess;
+    if (ic->ic_state != IEEE80211_S_SCAN) {
+        XYLog("%s: Resetting active state %d to SCAN before new association\n", __FUNCTION__, ic->ic_state);
+        if (ic->ic_state > IEEE80211_S_AUTH && ic->ic_bss != NULL)
+            IEEE80211_SEND_MGMT(ic, ic->ic_bss, IEEE80211_FC0_SUBTYPE_DEAUTH, IEEE80211_REASON_AUTH_LEAVE);
+        ieee80211_del_ess(ic, nullptr, 0, 1);
+        ieee80211_deselect_ess(ic);
+        if (ic->ic_bss != NULL) {
+            ic->ic_bss->ni_port_valid = 0;
+            ic->ic_bss = NULL;
+        }
+        ieee80211_new_state(ic, IEEE80211_S_SCAN, -1);
+    }
 
     uint8_t target_ssid[IEEE80211_NWID_LEN + 1] = {0};
     uint32_t target_ssid_len = 0;
@@ -1187,9 +1208,6 @@ IOReturn AirportRTW::setDISASSOCIATE(OSObject *object)
     if (ic->ic_state > IEEE80211_S_AUTH && ic->ic_bss != NULL)
         IEEE80211_SEND_MGMT(ic, ic->ic_bss, IEEE80211_FC0_SUBTYPE_DEAUTH, IEEE80211_REASON_AUTH_LEAVE);
     
-    if (ic->ic_state == IEEE80211_S_ASSOC || ic->ic_state == IEEE80211_S_AUTH)
-        return kIOReturnSuccess;
-    
     disassocIsVoluntary = true;
 
     ieee80211_del_ess(ic, nullptr, 0, 1);
@@ -1199,7 +1217,12 @@ IOReturn AirportRTW::setDISASSOCIATE(OSObject *object)
 #endif
     ic->ic_assoc_status = APPLE80211_STATUS_UNAVAILABLE;
     ic->ic_deauth_reason = APPLE80211_REASON_ASSOC_LEAVING;
+    if (ic->ic_bss != NULL) {
+        ic->ic_bss->ni_port_valid = 0;
+        ic->ic_bss = NULL;
+    }
     ieee80211_new_state(ic, IEEE80211_S_SCAN, -1);
+    fHalService->getDriverController()->clearScanningFlags();
     return kIOReturnSuccess;
 }
 

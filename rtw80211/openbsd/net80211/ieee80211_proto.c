@@ -1681,17 +1681,13 @@ justcleanup:
                     (ni->ni_flags & IEEE80211_NODE_HE) ?
                     " HE enabled" : "");
 			}
-#ifdef USE_APPLE_SUPPLICANT
-            {
-#elif (defined IO80211FAMILY_V2)
             if (ieee80211_is_8021x_akm((enum ieee80211_akm)ni->ni_rsnakms) ||
                 !(ic->ic_flags & IEEE80211_F_RSNON)) {
-#else
-			if (!(ic->ic_flags & IEEE80211_F_RSNON)) {
-#endif
 				/*
-				 * NB: When RSN is enabled, we defer setting
-				 * the link up until the port is valid.
+				 * NB: When RSN is enabled for PSK, we defer setting
+				 * the link up until the 4-way handshake completes.
+				 * For 802.1X enterprise and non-RSN networks, set link
+				 * state UP immediately so eapolclient / DHCP runs.
 				 */
 				ieee80211_set_link_state(ic, LINK_STATE_UP);
 				ni->ni_assoc_fail = 0;
