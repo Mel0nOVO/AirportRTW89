@@ -800,6 +800,8 @@ int ItlRtw89::newstate(struct ieee80211com *ic,
     auto *owner = container_of(sc, ItlRtw89, sc);
     const enum ieee80211_state previous = ic->ic_state;
     struct ieee80211_node *node = ic->ic_bss;
+    if (!node)
+        return sc->sc_newstate(ic, state, arg);
     bool beganScan = false;
     bool endedScan = false;
     bool associated = false;

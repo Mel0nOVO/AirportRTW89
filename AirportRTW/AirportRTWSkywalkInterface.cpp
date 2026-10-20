@@ -789,7 +789,6 @@ setASSOCIATE(struct apple80211_assoc_data *ad)
         ieee80211_deselect_ess(ic);
         if (ic->ic_bss != NULL) {
             ic->ic_bss->ni_port_valid = 0;
-            ic->ic_bss = NULL;
         }
         ieee80211_new_state(ic, IEEE80211_S_SCAN, -1);
     }
@@ -935,7 +934,6 @@ setDISASSOCIATE(struct apple80211_disassoc_data *ad)
     ic->ic_deauth_reason = APPLE80211_REASON_ASSOC_LEAVING;
     if (ic->ic_bss != NULL) {
         ic->ic_bss->ni_port_valid = 0;
-        ic->ic_bss = NULL;
     }
     ieee80211_new_state(ic, IEEE80211_S_SCAN, -1);
     fHalService->getDriverController()->clearScanningFlags();
