@@ -215,7 +215,9 @@ This project is licensed under the **GNU General Public License v2.0 (GPLv2)**. 
 
 ### Credits
 - [OpenIntelWireless](https://github.com/OpenIntelWireless): Creators of `itlwm` and `AirportItlwm`, providing the groundbreaking modular IOKit/Skywalk foundation.
+- [AirPort_RTW88 / Realtek-AirPort-Family](https://github.com/xnoah222/Realtek-AirPort-Family): Pioneering the initial Realtek wireless driver compatibility shims for macOS.
+- [FranciumOS-org / Airport_RTW89](https://github.com/FranciumOS-org/Airport_RTW89) (@Thick-Adagio-4010): Early architectural efforts bringing Realtek RTW89 support to macOS.
+- [souissiak1-maker/AirportRTW](https://github.com/souissiak1-maker/AirportRTW): Upstream prototype work adapting RTW89 for macOS.
 - [Linux Wireless Community](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/net/wireless/realtek/rtw89): Authors of the official Linux `rtw89` driver.
 - [Realtek](https://www.realtek.com/): Hardware specifications and firmware blobs.
-- [souissiak1-maker/AirportRTW](https://github.com/souissiak1-maker/AirportRTW): Upstream prototype work adapting RTW89 for macOS.
 - [Dortania / OpenCore](https://github.com/dortania): OpenCore bootloader and legacy wireless patch infrastructure.

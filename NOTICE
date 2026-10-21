@@ -2,7 +2,7 @@ AirportRTW89
 Copyright (c) 2026 AirportRTW89 Contributors
 
 This project is licensed under the GNU General Public License v2.0 (GPLv2).
-It incorporates and derives from several third-party software projects:
+It incorporates and derives from several third-party open-source software projects:
 
 1. Realtek RTW89 Linux Wireless Driver:
    - Source: Linux Kernel drivers/net/wireless/realtek/rtw89
@@ -14,13 +14,28 @@ It incorporates and derives from several third-party software projects:
    - Copyright (c) OpenIntelWireless Authors
    - License: GNU General Public License v2.0 (GPL-2.0)
 
-3. OpenBSD net80211 Stack:
+3. AirPort_RTW88 / Realtek-AirPort-Family:
+   - Source: https://github.com/xnoah222/Realtek-AirPort-Family
+   - Copyright (c) xnoah222 and contributors
+   - License: GNU General Public License v2.0 (GPL-2.0)
+
+4. FranciumOS-org / Airport_RTW89:
+   - Source: https://github.com/FranciumOS-org/Airport_RTW89
+   - Copyright (c) Thick-Adagio-4010, FranciumOS-org, and contributors
+   - License: GNU General Public License v2.0 (GPL-2.0)
+
+5. souissiak1-maker / AirportRTW:
+   - Source: https://github.com/souissiak1-maker/AirportRTW
+   - Copyright (c) souissiak1-maker and contributors
+   - License: GNU General Public License v2.0 (GPL-2.0)
+
+6. OpenBSD net80211 Stack:
    - Source: OpenBSD src/sys/net80211
    - Copyright (c) OpenBSD Contributors
    - License: BSD-3-Clause / ISC
    - Distributed here as part of a derivative work under GPL-2.0.
 
-4. Realtek Firmware Binary Blobs:
+7. Realtek Firmware Binary Blobs:
    - Files: rtw/hal_rtw89/firmware/*.bin
    - Source: linux-firmware (kernel.org)
    - Copyright (c) Realtek Semiconductor Corp.

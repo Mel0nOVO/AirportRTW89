@@ -210,7 +210,9 @@ ioreg -r -c AirportRTW
 
 ### 致谢
 - [OpenIntelWireless](https://github.com/OpenIntelWireless): 提供了卓越的 itlwm 架构基础。
+- [AirPort_RTW88 / Realtek-AirPort-Family](https://github.com/xnoah222/Realtek-AirPort-Family): 率先实现了 Realtek 无线网卡在 macOS 下的兼容层基础。
+- [FranciumOS-org / Airport_RTW89](https://github.com/FranciumOS-org/Airport_RTW89) (@Thick-Adagio-4010): 早期针对 Realtek RTW89 系列网卡的 macOS 移植探索工作。
+- [souissiak1-maker/AirportRTW](https://github.com/souissiak1-maker/AirportRTW): 原始移植与代码分支。
 - [Linux Wireless Community](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/net/wireless/realtek/rtw89): 维护高质量的 Linux 原生 rtw89 驱动。
 - [Realtek](https://www.realtek.com/): 硬件规范与固件。
-- [souissiak1-maker/AirportRTW](https://github.com/souissiak1-maker/AirportRTW): 原始移植项目。
 - [Dortania / OpenCore](https://github.com/dortania): 现代引导框架与无线协议栈补丁机制。
