@@ -1700,9 +1700,6 @@ ieee80211_recv_probe_resp(struct ieee80211com *ic, mbuf_t m,
     wh = mtod(m, struct ieee80211_frame *);
     frm = (const u_int8_t *)&wh[1];
     efrm = mtod(m, u_int8_t *) + mbuf_len(m);
-    XYLog("PROBERESP diag: mbuflen=%zu hdrlen=%zu bodyoff=%ld rem=%ld firstIE=0x%02x len=0x%02x\n",
-          mbuf_len(m), sizeof(*wh), (long)(frm - mtod(m, u_int8_t *)),
-          (long)(efrm - frm), frm[12], frm[13]);
     
     tstamp  = frm; frm += 8;
     bintval = LE_READ_2(frm); frm += 2;
@@ -1811,19 +1808,14 @@ ieee80211_recv_probe_resp(struct ieee80211com *ic, mbuf_t m,
         }
         frm += 2 + frm[1];
     }
-    XYLog("PROBERESP diag: loop_end ssid=%p ssidlen=%d rates=%p rateslen=%d rem=%ld\n",
-          (void *)ssid, ssid ? ssid[1] : -1, (void *)rates, rates ? rates[1] : -1,
-          (long)(efrm - frm));
     /* supported rates element is mandatory */
     if (rates == NULL || rates[1] > IEEE80211_RATE_MAXSIZE) {
         DPRINTF(("invalid supported rates element\n"));
-        XYLog("PROBERESP diag: BAIL rates==NULL or too big\n");
         return;
     }
     /* SSID element is mandatory */
     if (ssid == NULL || ssid[1] > IEEE80211_NWID_LEN) {
         DPRINTF(("invalid SSID element\n"));
-        XYLog("PROBERESP diag: BAIL ssid==NULL or too big\n");
         return;
     }
     if (csa != NULL && csa[1] < 3 * sizeof(uint8_t)) {
@@ -2103,21 +2095,21 @@ ieee80211_recv_probe_resp(struct ieee80211com *ic, mbuf_t m,
     }
     
     /*
-     * Set our SSID if we do not know it yet.
-     * If we are doing a directed scan for an AP with a hidden SSID
-     * we must collect the SSID from a probe response to override
-     * a non-zero-length SSID filled with zeroes that we may have
-     * received earlier in a beacon.
+     * Set our SSID.
+     * Always update the node's SSID when this frame carries a non-zero
+     * length SSID.  This is required on macOS because a node may be
+     * reused across scan passes: its ni_essid/ni_esslen may already hold
+     * stale data from an earlier pass, and the previous guard
+     * (ni_essid[0] == '\0') then never fired, leaving ni_esslen == 0 in
+     * the scan results (and the Wi-Fi list showing empty names).  It also
+     * lets a directed probe response override an empty SSID that a
+     * hidden-AP beacon advertised earlier.
      */
-    if (ssid[1] != 0 && ni->ni_essid[0] == '\0') {
+    if (ssid[1] != 0) {
         ni->ni_esslen = ssid[1];
         memset(ni->ni_essid, 0, sizeof(ni->ni_essid));
         /* we know that ssid[1] <= IEEE80211_NWID_LEN */
         memcpy(ni->ni_essid, &ssid[2], ssid[1]);
-        XYLog("PROBERESP diag: SET esslen=%d essid=%.*s\n", ssid[1], ssid[1], &ssid[2]);
-    } else {
-        XYLog("PROBERESP diag: SKIP ssid[1]=%d ni_essid[0]=0x%02x\n",
-              ssid[1], ni->ni_essid[0]);
     }
     IEEE80211_ADDR_COPY(ni->ni_bssid, wh->i_addr3);
     if (ic->ic_state == IEEE80211_S_SCAN &&
