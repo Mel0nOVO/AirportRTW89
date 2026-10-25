@@ -18,8 +18,12 @@ SInt32 AirportRTW::apple80211Request(unsigned int request_type,
                                        IO80211Interface *interface,
                                        void *data)
 {
-    if (request_type != SIOCGA80211 && request_type != SIOCSA80211)
+    if (request_type != SIOCGA80211 && request_type != SIOCSA80211) {
+        XYLog("FIXV8 apple80211Request REJECT bad req_type=0x%x (%u) req_num=%d (want G=0x%x S=0x%x)\n",
+              request_type, request_type, request_number,
+              SIOCGA80211, SIOCSA80211);
         return kIOReturnError;
+    }
     IOReturn ret = kIOReturnError;
     
     switch (request_number) {
@@ -1637,6 +1641,9 @@ getSCAN_RESULT(OSObject *object, struct apple80211_scan_result **sr)
 {
     struct ieee80211com *ic = fHalService->get80211Controller();
     const bool isRtw89 = OSDynamicCast(ItlRtw89, fHalService) != nullptr;
+    XYLog("FIXV8 getSCAN_RESULT ENTER sr=%p next=%p wrapping=%d state=%d nnodes=%d\n",
+          (void *)sr, (void *)fNextNodeToSend, (int)fScanResultWrapping,
+          (int)ic->ic_state, (int)ic->ic_nnodes);
     if (isRtw89) {
         setProperty("RTW89AppleScanResultRequestCount",
                     ++rtwScanResultRequestCount, 64);
