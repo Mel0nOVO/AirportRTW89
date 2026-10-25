@@ -794,6 +794,19 @@ void ItlRtw89::receive(void *opaque, const uint8_t *frame, size_t length,
         __sync_fetch_and_add(&owner->beaconProbeCount, 1);
         IOLog("ItlRtw89: scan RX subtype 0x%02x len %lu rssi %d freq %u\n",
               frameSubtype, (unsigned long)length, (int)rssi, frequency);
+        // ---- DIAG: dump first 72 bytes of first 30 beacons to locate scan bug ----
+        if (owner->beaconProbeCount <= 30) {
+            unsigned int dumpLen = (unsigned int)(length < 72 ? length : 72);
+            IOLog("ItlRtw89: DIAG beacon#%llu len %lu hex:",
+                  (unsigned long long)owner->beaconProbeCount, (unsigned long)length);
+            for (unsigned int off = 0; off < dumpLen; off++) {
+                IOLog("%02x%s", frame[off], (off % 16 == 15) ? "\n" : " ");
+            }
+            if (dumpLen % 16 != 0)
+                IOLog("\n");
+            IOLog("ItlRtw89: DIAG beacon#%llu end\n",
+                  (unsigned long long)owner->beaconProbeCount);
+        }
     }
     const int networkPriority = splnet();
     struct ieee80211_node *node = ieee80211_find_rxnode(ic, wh);
