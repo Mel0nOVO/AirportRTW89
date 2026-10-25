@@ -792,8 +792,10 @@ void ItlRtw89::receive(void *opaque, const uint8_t *frame, size_t length,
         (frameSubtype == IEEE80211_FC0_SUBTYPE_BEACON ||
          frameSubtype == IEEE80211_FC0_SUBTYPE_PROBE_RESP)) {
         __sync_fetch_and_add(&owner->beaconProbeCount, 1);
-        IOLog("ItlRtw89: scan RX subtype 0x%02x len %lu rssi %d freq %u\n",
-              frameSubtype, (unsigned long)length, (int)rssi, frequency);
+        IOLog("ItlRtw89: scan RX subtype 0x%02x skblen %lu mbuflen %lu pktlen %lu rssi %d freq %u\n",
+              frameSubtype, (unsigned long)length,
+              (unsigned long)mbuf_len(m), (unsigned long)mbuf_pkthdr_len(m),
+              (int)rssi, frequency);
         // ---- DIAG: hex dump first 64 bytes of EVERY beacon (one line) ----
         {
             static const char hexdig[] = "0123456789abcdef";
