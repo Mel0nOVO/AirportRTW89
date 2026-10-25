@@ -2110,6 +2110,9 @@ ieee80211_recv_probe_resp(struct ieee80211com *ic, mbuf_t m,
         memset(ni->ni_essid, 0, sizeof(ni->ni_essid));
         /* we know that ssid[1] <= IEEE80211_NWID_LEN */
         memcpy(ni->ni_essid, &ssid[2], ssid[1]);
+        XYLog("FIXV6 SET node=%p esslen=%d essid=%.*s\n", (void *)ni, ssid[1], ssid[1], &ssid[2]);
+    } else {
+        XYLog("FIXV6 EMPTY ssid[1]=%d node=%p ni_essid[0]=0x%02x\n", ssid[1], (void *)ni, ni->ni_essid[0]);
     }
     IEEE80211_ADDR_COPY(ni->ni_bssid, wh->i_addr3);
     if (ic->ic_state == IEEE80211_S_SCAN &&
