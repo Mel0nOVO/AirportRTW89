@@ -794,18 +794,19 @@ void ItlRtw89::receive(void *opaque, const uint8_t *frame, size_t length,
         __sync_fetch_and_add(&owner->beaconProbeCount, 1);
         IOLog("ItlRtw89: scan RX subtype 0x%02x len %lu rssi %d freq %u\n",
               frameSubtype, (unsigned long)length, (int)rssi, frequency);
-        // ---- DIAG: dump first 72 bytes of first 30 beacons to locate scan bug ----
-        if (owner->beaconProbeCount <= 30) {
-            unsigned int dumpLen = (unsigned int)(length < 72 ? length : 72);
-            IOLog("ItlRtw89: DIAG beacon#%llu len %lu hex:",
-                  (unsigned long long)owner->beaconProbeCount, (unsigned long)length);
-            for (unsigned int off = 0; off < dumpLen; off++) {
-                IOLog("%02x%s", frame[off], (off % 16 == 15) ? "\n" : " ");
+        // ---- DIAG: hex dump first 64 bytes of EVERY beacon (one line) ----
+        {
+            static const char hexdig[] = "0123456789abcdef";
+            unsigned int dumpLen = (unsigned int)(length < 64 ? length : 64);
+            char hexbuf[192];
+            unsigned int pos = 0;
+            for (unsigned int off = 0; off < dumpLen && pos + 2 < sizeof(hexbuf); off++) {
+                hexbuf[pos++] = hexdig[frame[off] >> 4];
+                hexbuf[pos++] = hexdig[frame[off] & 0x0f];
             }
-            if (dumpLen % 16 != 0)
-                IOLog("\n");
-            IOLog("ItlRtw89: DIAG beacon#%llu end\n",
-                  (unsigned long long)owner->beaconProbeCount);
+            hexbuf[pos] = 0;
+            IOLog("ItlRtw89: DIAG b#%llu hdr:%s\n",
+                  (unsigned long long)owner->beaconProbeCount, hexbuf);
         }
     }
     const int networkPriority = splnet();
