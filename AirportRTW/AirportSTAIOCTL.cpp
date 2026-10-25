@@ -1555,17 +1555,20 @@ setSCAN_REQ(OSObject *object,
           ether_sprintf(sd->bssid.octet));
 #endif
     if (fScanResultWrapping) {
+        XYLog("FIXV7 SCANREQ reject (wrapping, return 22) state=%d\n", ic->ic_state);
         if (OSDynamicCast(ItlRtw89, fHalService))
             setProperty("RTW89AppleScanRequestResult", (UInt64)22, 32);
         return 22;
     }
     if (ic->ic_state <= IEEE80211_S_INIT) {
+        XYLog("FIXV7 SCANREQ reject (state<=INIT, return 22) state=%d\n", ic->ic_state);
         if (OSDynamicCast(ItlRtw89, fHalService))
             setProperty("RTW89AppleScanRequestResult", (UInt64)22, 32);
         return 22;
     }
     if (OSDynamicCast(ItlRtw89, fHalService))
         setProperty("RTW89AppleScanRequestResult", (UInt64)0, 32);
+    XYLog("FIXV7 SCANREQ accept type=%d state=%d\n", sd->scan_type, ic->ic_state);
     if (sd->scan_type == APPLE80211_SCAN_TYPE_FAST || sd->scan_type == APPLE80211_SCAN_TYPE_PASSIVE) {
         if (scanSource) {
             scanSource->setTimeoutMS(scanDoneDelayMS);
@@ -1640,11 +1643,14 @@ getSCAN_RESULT(OSObject *object, struct apple80211_scan_result **sr)
     if (fNextNodeToSend == NULL) {
         if (fScanResultWrapping) {
             fScanResultWrapping = false;
+            XYLog("FIXV7 SCANRET end (return 5) nnodes=%d\n", ic->ic_nnodes);
             return 5;
         } else {
             fNextNodeToSend = RB_MIN(ieee80211_tree, &ic->ic_tree);
-            if (fNextNodeToSend == NULL)
+            if (fNextNodeToSend == NULL) {
+                XYLog("FIXV7 SCANRET empty tree (return 12) nnodes=%d\n", ic->ic_nnodes);
                 return 12;
+            }
         }
     }
 //    XYLog("%s ni_bssid=%s ni_essid=%s channel=%d flags=%d asr_cap=%d asr_nrates=%d asr_ssid_len=%d asr_ie_len=%d asr_rssi=%d\n", __FUNCTION__, ether_sprintf(fNextNodeToSend->ni_bssid), fNextNodeToSend->ni_essid, ieee80211_chan2ieee(ic, fNextNodeToSend->ni_chan), ieeeChanFlag2apple(fNextNodeToSend->ni_chan->ic_flags), fNextNodeToSend->ni_capinfo, fNextNodeToSend->ni_rates.rs_nrates, fNextNodeToSend->ni_esslen, fNextNodeToSend->ni_rsnie_tlv == NULL ? 0 : fNextNodeToSend->ni_rsnie_tlv_len, fNextNodeToSend->ni_rssi);
@@ -1769,6 +1775,14 @@ getSCAN_RESULT(OSObject *object, struct apple80211_scan_result **sr)
     }
 
     *sr = result;
+    
+    XYLog("FIXV7 SCANRET ok esslen=%d essid=%.*s chan=%d cap=0x%x rates=%d ielen=%d\n",
+          (int)fNextNodeToSend->ni_esslen,
+          (int)fNextNodeToSend->ni_esslen, (const char *)fNextNodeToSend->ni_essid,
+          (int)ieee80211_chan2ieee(ic, fNextNodeToSend->ni_chan),
+          (unsigned)fNextNodeToSend->ni_capinfo,
+          (int)fNextNodeToSend->ni_rates.rs_nrates,
+          (int)(result->asr_ie_len));
     
     fNextNodeToSend = RB_NEXT(ieee80211_tree, &ic->ic_tree, fNextNodeToSend);
     if (fNextNodeToSend == NULL)
