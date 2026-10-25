@@ -1141,7 +1141,7 @@ IOReturn AirportRTWSkywalkInterface::
 setSCAN_REQ(struct apple80211_scan_data *sd)
 {
     struct ieee80211com *ic = fHalService->get80211Controller();
-    const UInt32 scanDoneDelayMS = 100;
+    const UInt32 scanDoneDelayMS = 3000;
 #if 0
     XYLog("%s Type: %u BSS Type: %u PHY Mode: %u Dwell time: %u Rest time: %u Num channels: %u SSID: %s BSSID: %s\n",
           __FUNCTION__,
@@ -1165,7 +1165,7 @@ setSCAN_REQ(struct apple80211_scan_data *sd)
         }
         return kIOReturnSuccess;
     }
-    ieee80211_begin_cache_bgscan(&ic->ic_ac.ac_if);
+    ieee80211_begin_scan(&ic->ic_ac.ac_if);
     if (scanSource) {
         scanSource->setTimeoutMS(scanDoneDelayMS);
         scanSource->enable();

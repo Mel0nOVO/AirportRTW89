@@ -1414,11 +1414,9 @@ eventHandler(struct ieee80211com *ic, int msgCode, void *data)
         case IEEE80211_EVT_STA_DEAUTH:
             interface->postMessage(APPLE80211_M_DEAUTH_RECEIVED);
             break;
-#if 0
         case IEEE80211_EVT_SCAN_DONE:
             interface->postMessage(APPLE80211_M_SCAN_DONE);
             break;
-#endif
         default:
             break;
     }
@@ -1537,7 +1535,7 @@ setSCAN_REQ(OSObject *object,
                             struct apple80211_scan_data *sd)
 {
     struct ieee80211com *ic = fHalService->get80211Controller();
-    const UInt32 scanDoneDelayMS = 100;
+    const UInt32 scanDoneDelayMS = 3000;
     if (OSDynamicCast(ItlRtw89, fHalService)) {
         setProperty("RTW89AppleScanRequestCount", ++rtwScanRequestCount, 64);
         setProperty("RTW89AppleScanRequestState", (UInt64)ic->ic_state, 8);
@@ -1576,7 +1574,12 @@ setSCAN_REQ(OSObject *object,
         }
         return kIOReturnSuccess;
     }
-    ieee80211_begin_cache_bgscan(&ic->ic_ac.ac_if);
+    /* An active scan must actually drive the hardware, even when the
+     * interface is not yet associated (ic_state == IEEE80211_S_SCAN).
+     * ieee80211_begin_cache_bgscan() only runs when ic_state == RUN and
+     * depends on ic_bgscan_start which is never wired up, so it silently
+     * did nothing and the node tree stayed empty forever. */
+    ieee80211_begin_scan(&ic->ic_ac.ac_if);
     if (scanSource) {
         scanSource->setTimeoutMS(scanDoneDelayMS);
         scanSource->enable();
@@ -1588,7 +1591,7 @@ IOReturn AirportRTW::
 setSCAN_REQ_MULTIPLE(OSObject *object, struct apple80211_scan_multiple_data *sd)
 {
     struct ieee80211com *ic = fHalService->get80211Controller();
-    const UInt32 scanDoneDelayMS = 100;
+    const UInt32 scanDoneDelayMS = 3000;
     if (OSDynamicCast(ItlRtw89, fHalService)) {
         setProperty("RTW89AppleScanMultipleRequestCount",
                     ++rtwScanRequestCount, 64);
@@ -1621,7 +1624,7 @@ setSCAN_REQ_MULTIPLE(OSObject *object, struct apple80211_scan_multiple_data *sd)
     }
     if (OSDynamicCast(ItlRtw89, fHalService))
         setProperty("RTW89AppleScanRequestResult", (UInt64)0, 32);
-    ieee80211_begin_cache_bgscan(&ic->ic_ac.ac_if);
+    ieee80211_begin_scan(&ic->ic_ac.ac_if);
     if (scanSource) {
         scanSource->setTimeoutMS(scanDoneDelayMS);
         scanSource->enable();
