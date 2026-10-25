@@ -1725,6 +1725,12 @@ getSCAN_RESULT(OSObject *object, struct apple80211_scan_result **sr)
     result->asr_ssid_len = fNextNodeToSend->ni_esslen;
     if (result->asr_ssid_len != 0)
         memcpy(&result->asr_ssid, fNextNodeToSend->ni_essid, result->asr_ssid_len);
+    XYLog("FIXV6 SCANRESULT node=%p esslen=%d essid[0]=0x%02x bssid=%02x:%02x:%02x:%02x:%02x:%02x\n",
+          (void *)fNextNodeToSend, (int)fNextNodeToSend->ni_esslen,
+          fNextNodeToSend->ni_essid[0],
+          fNextNodeToSend->ni_bssid[0], fNextNodeToSend->ni_bssid[1],
+          fNextNodeToSend->ni_bssid[2], fNextNodeToSend->ni_bssid[3],
+          fNextNodeToSend->ni_bssid[4], fNextNodeToSend->ni_bssid[5]);
 
     if (isRtw89) {
         setProperty("RTW89AppleScanResultSSIDLength",
